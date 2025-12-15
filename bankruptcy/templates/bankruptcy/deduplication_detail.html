@@ -1,0 +1,293 @@
+{% extends "bankruptcy/base.html" %}
+{% load humanize %}
+
+{% block title %}Деталі дедуплікації - Аналіз банкрутства{% endblock %}
+
+{% block extra_css %}
+<style>
+.stats-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.stat-card h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.stat-card .stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    margin: 0;
+}
+
+.filters-panel {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.log-entry {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    transition: all 0.2s;
+}
+
+.log-entry:hover {
+    border-color: #007bff;
+    box-shadow: 0 2px 8px rgba(0,123,255,0.15);
+}
+
+.operation-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.operation-creditor_added { background: #d4edda; color: #155724; }
+.operation-duplicate_removed { background: #f8d7da; color: #721c24; }
+.operation-claim_updated { background: #fff3cd; color: #856404; }
+.operation-case_processed { background: #d1ecf1; color: #0c5460; }
+
+.doc-type-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    margin-left: 5px;
+}
+
+.doc-initial { background: #e2f3ff; color: #0066cc; }
+.doc-full { background: #fff2e2; color: #cc6600; }
+.doc-summary { background: #f0e6ff; color: #6600cc; }
+
+.amount-change {
+    font-weight: bold;
+}
+
+.amount-increase { color: #28a745; }
+.amount-decrease { color: #dc3545; }
+
+.case-link {
+    color: #007bff;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.case-link:hover {
+    text-decoration: underline;
+}
+
+.pagination-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2><i class="fas fa-compress-arrows-alt"></i> Деталі дедуплікації кредиторів</h2>
+                <a href="{% url 'bankruptcy:creditors_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Назад до кредиторів
+                </a>
+            </div>
+
+            <!-- Загальна статистика -->
+            <div class="stats-overview">
+                <div class="stat-card">
+                    <h4>Справи дедупліковано</h4>
+                    <div class="stat-value">{{ stats.total_cases_processed|floatformat:0 }}</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                    <h4>Кредиторів додано</h4>
+                    <div class="stat-value">{{ stats.total_creditors_added|floatformat:0 }}</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);">
+                    <h4>Дублікатів видалено</h4>
+                    <div class="stat-value">{{ stats.total_duplicates_removed|floatformat:0 }}</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%);">
+                    <h4>Вимог оновлено</h4>
+                    <div class="stat-value">{{ stats.total_claims_updated|floatformat:0 }}</div>
+                </div>
+            </div>
+
+            <!-- Панель фільтрів -->
+            <div class="filters-panel">
+                <form method="get" class="row align-items-end">
+                    <div class="col-md-3">
+                        <label for="operation_type" class="form-label">Тип операції:</label>
+                        <select name="operation_type" id="operation_type" class="form-select">
+                            <option value="">Всі операції</option>
+                            {% for op_type, op_label in operation_types %}
+                                <option value="{{ op_type }}" {% if current_filters.operation_type == op_type %}selected{% endif %}>
+                                    {{ op_label }} ({{ operation_stats.op_type.count|default:0 }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="document_type" class="form-label">Тип документа:</label>
+                        <select name="document_type" id="document_type" class="form-select">
+                            <option value="">Всі документи</option>
+                            {% for doc_type, doc_label in document_types %}
+                                <option value="{{ doc_type }}" {% if current_filters.document_type == doc_type %}selected{% endif %}>
+                                    {{ doc_label }} ({{ document_stats.doc_type.count|default:0 }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="search" class="form-label">Пошук:</label>
+                        <input type="text" name="search" id="search" class="form-control"
+                               value="{{ current_filters.search }}"
+                               placeholder="Пошук по кредитору, справі або підприємству...">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-search"></i> Фільтрувати
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Список логів операцій -->
+            <div class="logs-list">
+                {% if logs %}
+                    {% for log in logs %}
+                        <div class="log-entry">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="operation-badge operation-{{ log.operation_type }}">
+                                            {{ log.get_operation_type_display }}
+                                        </span>
+                                        <span class="doc-type-badge doc-{{ log.document_type }}">
+                                            {{ log.get_document_type_display }}
+                                        </span>
+                                        <span class="text-muted ms-2" style="font-size: 12px;">
+                                            {{ log.created_at|date:"d.m.Y H:i" }}
+                                        </span>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>Справа:</strong>
+                                            <a href="{% url 'bankruptcy:case_detail' log.case.id %}" class="case-link" target="_blank">
+                                                {{ log.case.case_number }}
+                                            </a>
+                                            <br>
+                                            <small class="text-muted">{{ log.case.company.name|truncatechars:60 }}</small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            {% if log.creditor_name %}
+                                                <strong>Кредитор:</strong> {{ log.creditor_name|truncatechars:40 }}
+                                                <br>
+                                            {% endif %}
+
+                                            {% if log.old_amount and log.new_amount %}
+                                                <span class="amount-change">
+                                                    {% if log.new_amount > log.old_amount %}
+                                                        <span class="amount-increase">
+                                                            ↗ {{ log.old_amount|floatformat:2|intcomma }} → {{ log.new_amount|floatformat:2|intcomma }} грн
+                                                        </span>
+                                                    {% else %}
+                                                        <span class="amount-decrease">
+                                                            ↘ {{ log.old_amount|floatformat:2|intcomma }} → {{ log.new_amount|floatformat:2|intcomma }} грн
+                                                        </span>
+                                                    {% endif %}
+                                                </span>
+                                            {% elif log.new_amount %}
+                                                <span class="amount-change amount-increase">
+                                                    + {{ log.new_amount|floatformat:2|intcomma }} грн
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    {% if log.details %}
+                                        <details class="mt-2">
+                                            <summary style="cursor: pointer; font-size: 12px; color: #6c757d;">
+                                                Технічні деталі
+                                            </summary>
+                                            <pre style="font-size: 11px; background: #f8f9fa; padding: 8px; border-radius: 4px; margin-top: 5px;">{{ log.details|pprint }}</pre>
+                                        </details>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+
+                    <!-- Пагінація -->
+                    {% if logs.has_other_pages %}
+                        <div class="pagination-wrapper">
+                            <nav>
+                                <ul class="pagination">
+                                    {% if logs.has_previous %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page=1{% if current_filters.operation_type %}&operation_type={{ current_filters.operation_type }}{% endif %}{% if current_filters.document_type %}&document_type={{ current_filters.document_type }}{% endif %}{% if current_filters.search %}&search={{ current_filters.search }}{% endif %}">Перша</a>
+                                        </li>
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ logs.previous_page_number }}{% if current_filters.operation_type %}&operation_type={{ current_filters.operation_type }}{% endif %}{% if current_filters.document_type %}&document_type={{ current_filters.document_type }}{% endif %}{% if current_filters.search %}&search={{ current_filters.search }}{% endif %}">Попередня</a>
+                                        </li>
+                                    {% endif %}
+
+                                    <li class="page-item active">
+                                        <span class="page-link">
+                                            Сторінка {{ logs.number }} з {{ logs.paginator.num_pages }}
+                                        </span>
+                                    </li>
+
+                                    {% if logs.has_next %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ logs.next_page_number }}{% if current_filters.operation_type %}&operation_type={{ current_filters.operation_type }}{% endif %}{% if current_filters.document_type %}&document_type={{ current_filters.document_type }}{% endif %}{% if current_filters.search %}&search={{ current_filters.search }}{% endif %}">Наступна</a>
+                                        </li>
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ logs.paginator.num_pages }}{% if current_filters.operation_type %}&operation_type={{ current_filters.operation_type }}{% endif %}{% if current_filters.document_type %}&document_type={{ current_filters.document_type }}{% endif %}{% if current_filters.search %}&search={{ current_filters.search }}{% endif %}">Остання</a>
+                                        </li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                        </div>
+                    {% endif %}
+
+                {% else %}
+                    <div class="text-center py-5">
+                        <div class="text-muted">
+                            <i class="fas fa-inbox fa-3x mb-3"></i>
+                            <h4>Немає записів</h4>
+                            <p>За заданими фільтрами записи не знайдено.</p>
+                            <a href="?" class="btn btn-outline-secondary">Скинути фільтри</a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

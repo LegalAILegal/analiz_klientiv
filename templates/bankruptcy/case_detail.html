@@ -1,0 +1,826 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load ukrainian_formatting %}
+
+{% block title %}Справа № {{ case.number }} - Аналіз клієнтів{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* СТИЛІ ТОЧНО ЯК У РОЗКЛАДІ ЗАСІДАНЬ */
+    .decisions-container {
+        padding: 10px 20px;
+        width: 100%;
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-sizing: border-box;
+    }
+    
+    /* Чередування кольорів прибрано */
+    
+    /* WEBKIT СКРОЛ БАРИ */
+    .table-header-fixed::-webkit-scrollbar,
+    .table-body-scrollable::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    
+    .table-header-fixed::-webkit-scrollbar-track,
+    .table-body-scrollable::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+    
+    .table-header-fixed::-webkit-scrollbar-thumb,
+    .table-body-scrollable::-webkit-scrollbar-thumb {
+        background: #6097ce;
+        border-radius: 4px;
+    }
+    
+    .table-header-fixed::-webkit-scrollbar-thumb:hover,
+    .table-body-scrollable::-webkit-scrollbar-thumb:hover {
+        background: #5088bd;
+    }
+    
+    .decisions-header {
+        background: white;
+        padding: 20px 40px;
+        flex-shrink: 0;
+        border-bottom: 1px solid #e0cfc0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .header-title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    
+    .header-info {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+    }
+    
+    .decisions-header h1 {
+        color: #131f49;
+        font-size: 28px;
+        font-weight: bold;
+        margin: 0;
+        font-family: "FixelDisplay", "Fixel", Arial, sans-serif;
+        flex: 1;
+    }
+    
+    .case-info-item {
+        background: #f8f9fa;
+        padding: 6px 10px;
+        border-radius: 5px;
+        border: 1px solid #e0cfc0;
+        font-size: 12px;
+        color: #5b6678;
+        white-space: nowrap;
+    }
+    
+    .case-info-item strong {
+        color: #131f49;
+        font-weight: 600;
+    }
+    
+    /* АДАПТИВНА ТАБЛИЦЯ НА 100% ШИРИНИ ЕКРАНУ */
+    .table-container {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        width: 100%;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .table-header-fixed {
+        background: #131f49;
+        color: white;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        overflow-y: scroll; /* ЗАВЖДИ ПОКАЗУЄМО ВЕРТИКАЛЬНИЙ СКРОЛ БАР У ШАПЦІ */
+    }
+
+    .table-body-scrollable {
+        flex: 1;
+        overflow-y: scroll;
+        min-height: 0;
+    }
+
+    /* ЄДИНА ТАБЛИЦЯ З ФІКСОВАНОЮ ШИРИНОЮ СТОВБЦІВ */
+    .decisions-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        background: white;
+        table-layout: fixed;
+        /* БЕЗ min-width - таблиця буде точно на 100% видимої ширини */
+    }
+    
+    .decisions-table thead th {
+        padding: 12px 8px;
+        text-align: center;
+        font-weight: bold;
+        border-right: 1px solid #6097ce;
+        vertical-align: middle;
+        background: #131f49;
+        color: white;
+        position: relative;
+        cursor: pointer;
+        white-space: normal; /* ДОЗВОЛЯЄМО ПЕРЕНЕСЕННЯ ТЕКСТУ */
+        word-wrap: break-word; /* РОЗБИВАЄМО ДОВГІ СЛОВА */
+        line-height: 1.2; /* КОМПАКТНИЙ МІЖРЯДКОВИЙ ІНТЕРВАЛ */
+    }
+    
+    .decisions-table thead th:last-child {
+        border-right: none;
+    }
+    
+    .decisions-table tbody td {
+        padding: 10px 8px;
+        vertical-align: middle; /* ВЕРТИКАЛЬНЕ ВИРІВНЮВАННЯ ПО ЦЕНТРУ */
+        border-right: 1px solid #d3dbe1;
+        border-bottom: 1px solid #d3dbe1;
+        word-wrap: break-word;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        height: auto;
+        min-height: 40px;
+        line-height: 1.3;
+        text-align: left; /* ГОРИЗОНТАЛЬНЕ ВИРІВНЮВАННЯ ЗЛІВА */
+    }
+    
+    .decisions-table tbody td:last-child {
+        border-right: none;
+    }
+    
+    .decisions-table tbody tr:hover {
+        background-color: #e0cfc0;
+    }
+    
+    /* СТИЛІ ДЛЯ КОНКРЕТНИХ СТОВБЦІВ */
+    .doc-link, .doc-id-link {
+        color: #6097ce;
+        text-decoration: none;
+        font-weight: bold;
+    }
+    
+    .doc-link:hover, .doc-id-link:hover {
+        color: #131f49;
+        text-decoration: underline;
+    }
+    
+    .resolution-cell {
+        text-align: left;
+        vertical-align: top;
+        word-wrap: break-word;
+        font-size: 11px;
+        line-height: 1.3;
+        position: relative;
+    }
+    
+    .resolution-text {
+        display: -webkit-box;
+        -webkit-line-clamp: 7;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-height: 9.1em; /* 7 рядків * 1.3 line-height */
+        line-height: 1.3;
+        word-wrap: break-word;
+        word-break: break-word;
+        hyphens: auto;
+        font-size: 11px;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+    
+    .resolution-text.expanded {
+        display: block !important;
+        -webkit-line-clamp: unset !important;
+        -webkit-box-orient: unset !important;
+        max-height: none !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+    
+    .expand-toggle {
+        position: absolute;
+        bottom: 2px;
+        right: 5px;
+        background: #6097ce;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 3px 8px;
+        font-size: 10px;
+        font-weight: bold;
+        cursor: pointer;
+        opacity: 0.9;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        z-index: 10;
+        min-width: 50px;
+        text-align: center;
+        display: none; /* За замовчуванням приховані */
+    }
+    
+    .expand-toggle:hover {
+        opacity: 1;
+        background: #5088bd;
+        transform: scale(1.05);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+    
+    .resolution-cell:hover .expand-toggle {
+        opacity: 1;
+    }
+    
+    .expand-toggle.visible {
+        display: block !important;
+    }
+    
+    /* Покращені стилі для кращого визначення місця кнопки */
+    .expand-toggle.hidden {
+        display: none !important;
+    }
+
+    /* КНОПКИ ТА КОНТРОЛИ */
+    .header-controls {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-top: 15px;
+    }
+    
+    .decisions-count {
+        background: #5b6678;
+        color: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 12px;
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+    
+    /* SR_AI стилі забарвлення - точно як у Excel (ВИМКНЕНО - використовується тільки червоне підсвічування) */
+    .highlight-viznaty {
+        /* ВИМКНЕНО: Залишаємо тільки червоне підсвічування для комбінацій */
+        /* background-color: #FFFF00 !important; */
+        /* color: blue !important; */
+    }
+    
+    /* НОВЕ: Червоне підсвічування для комбінації "визнати" + "грошові вимоги" */
+    .highlight-critical-combination {
+        background-color: #FF0000 !important; /* ЧЕРВОНИЙ фон для комбінації */
+        color: white !important;
+        font-weight: bold !important;
+        border: 2px solid #CC0000 !important; /* Додатковий червоний бордер для видимості */
+    }
+    
+    /* Специфічний стиль для тексту резолютивної частини */
+    .resolution-text.highlight-critical-combination {
+        background-color: #FF0000 !important;
+        color: white !important;
+        font-weight: bold !important;
+        padding: 5px !important;
+        border-radius: 3px !important;
+    }
+    
+    /* Специфічний стиль для TD комірки */
+    td.resolution-cell.highlight-critical-combination {
+        background-color: #FF0000 !important;
+    }
+    
+    .highlight-decision {
+        background-color: #FFFF00 !important; /* Жовтий фон для "Постанова", "Рішення", "Судовий наказ" */
+    }
+    
+    /* SR_AI стилі для гіперпосилань */
+    .doc-id-link {
+        color: #0000FF !important;
+        text-decoration: underline !important;
+    }
+    
+    .doc-id-link:hover {
+        color: #800080 !important;
+    }
+    
+    .no-decisions {
+        text-align: center;
+        padding: 40px;
+        color: #5b6678;
+        font-style: italic;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url "bankruptcy:index" %}">Головна</a></li>
+                <li class="breadcrumb-item"><a href="{% url "bankruptcy:case_list" %}">Справи</a></li>
+                <li class="breadcrumb-item active">Справа № {{ case.number }}</li>
+            </ol>
+        </nav>
+        
+        <h1 class="mb-4">Справа про банкрутство № {{ case.number }}</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Основна інформація</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <td><strong>Дата провадження:</strong></td>
+                        <td>{{ case.date|date:"d.m.Y" }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Номер справи:</strong></td>
+                        <td>{{ case.case_number }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Тип провадження:</strong></td>
+                        <td>{{ case.type }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Суд:</strong></td>
+                        <td>{{ case.court.name }}</td>
+                    </tr>
+                    {% if case.start_date_auc %}
+                    <tr>
+                        <td><strong>Дата початку аукціону:</strong></td>
+                        <td>{{ case.start_date_auc }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if case.end_date_auc %}
+                    <tr>
+                        <td><strong>Дата закінчення аукціону:</strong></td>
+                        <td>{{ case.end_date_auc }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if case.end_registration_date %}
+                    <tr>
+                        <td><strong>Дата закінчення реєстрації:</strong></td>
+                        <td>{{ case.end_registration_date }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Інформація про підприємство</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <td><strong>Код ЄДРПОУ:</strong></td>
+                        <td>{{ case.company.edrpou }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Назва:</strong></td>
+                        <td>{{ case.company.name }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">Системна інформація</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <td><strong>Створено:</strong></td>
+                        <td>{{ case.created_at|date:"d.m.Y H:i" }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Оновлено:</strong></td>
+                        <td>{{ case.updated_at|date:"d.m.Y H:i" }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Реєстр вимог кредиторів -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-users"></i> Реєстр вимог кредиторів</h5>
+                    <span class="badge badge-light">{{ creditor_claims_count }} записів</span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if creditor_claims %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th style="width: 35%;">Назва кредитора</th>
+                                <th style="width: 10%;" class="text-center">1-а черга</th>
+                                <th style="width: 10%;" class="text-center">2-а черга</th>
+                                <th style="width: 10%;" class="text-center">3-я черга</th>
+                                <th style="width: 10%;" class="text-center">4-а черга</th>
+                                <th style="width: 10%;" class="text-center">5-а черга</th>
+                                <th style="width: 10%;" class="text-center">6-а черга</th>
+                                <th style="width: 5%;" class="text-center">Достовірність</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for claim in creditor_claims %}
+                            <tr>
+                                <td><strong style="color: black;">{{ claim.creditor.name }}</strong></td>
+                                <td class="text-right">
+                                    {% if claim.amount_1st_queue and claim.amount_1st_queue > 0 %}
+                                        <span style="color: black; font-weight: bold;">{{ claim.amount_1st_queue|ukrainian_currency }}</span>
+                                    {% else %}
+                                        <span style="color: black;">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    {% if claim.amount_2nd_queue and claim.amount_2nd_queue > 0 %}
+                                        <span style="color: black; font-weight: bold;">{{ claim.amount_2nd_queue|ukrainian_currency }}</span>
+                                    {% else %}
+                                        <span style="color: black;">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    {% if claim.amount_3rd_queue and claim.amount_3rd_queue > 0 %}
+                                        <span style="color: black; font-weight: bold;">{{ claim.amount_3rd_queue|ukrainian_currency }}</span>
+                                    {% else %}
+                                        <span style="color: black;">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    {% if claim.amount_4th_queue and claim.amount_4th_queue > 0 %}
+                                        <span style="color: black; font-weight: bold;">{{ claim.amount_4th_queue|ukrainian_currency }}</span>
+                                    {% else %}
+                                        <span style="color: black;">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    {% if claim.amount_5th_queue and claim.amount_5th_queue > 0 %}
+                                        <span style="color: black; font-weight: bold;">{{ claim.amount_5th_queue|ukrainian_currency }}</span>
+                                    {% else %}
+                                        <span style="color: black;">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    {% if claim.amount_6th_queue and claim.amount_6th_queue > 0 %}
+                                        <span style="color: black; font-weight: bold;">{{ claim.amount_6th_queue|ukrainian_currency }}</span>
+                                    {% else %}
+                                        <span style="color: black;">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if claim.confidence_score %}
+                                        <span class="badge {% if claim.confidence_score >= 0.8 %}badge-success{% elif claim.confidence_score >= 0.6 %}badge-warning{% else %}badge-danger{% endif %}" style="color: black;">
+                                            {{ claim.confidence_score|floatformat:2 }}
+                                        </span>
+                                    {% else %}
+                                        <span style="color: black;">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <div class="mb-3">
+                        <i class="fas fa-exclamation-triangle fa-3x text-warning"></i>
+                    </div>
+                    <h5>Дані кредиторів ще не проаналізовані</h5>
+                    <p class="text-muted">Запустіть аналіз мовною моделлю для автоматичного витягування інформації про кредиторів з резолютивних частин.</p>
+                    <div class="alert alert-info">
+                        <code>python manage.py analyze_creditors_llm --start-case {{ case.number }} --limit 1</code>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Судові рішення в стилі еталонного проєкту -->
+<div class="decisions-container">
+    
+    <div class="decisions-header">
+        <div class="header-title-row">
+            <h1>Судові рішення по справі {{ case.case_number }}</h1>
+            <div class="header-info">
+                <div class="case-info-item">
+                    <strong>Підприємство:</strong> {{ case.company.name|truncatechars:30 }}
+                </div>
+                <div class="case-info-item">
+                    <strong>ЄДРПОУ:</strong> {{ case.company.edrpou }}
+                </div>
+                <div class="decisions-count">{{ decisions_count }} документів</div>
+            </div>
+        </div>
+        
+        <!-- Статус пошуку -->
+        {% if is_tracked %}
+        <div class="header-controls">
+            <div class="case-info-item">
+                <strong>Статус пошуку:</strong>
+                {% if search_status == "pending" %}
+                    <span style="color: #ffc107;">Очікує</span>
+                {% elif search_status == "starting" %}
+                    <span style="color: #17a2b8;">Запускається</span>
+                {% elif search_status == "running" %}
+                    <span style="color: #007bff;">Виконується</span>
+                {% elif search_status == "completed" %}
+                    <span style="color: #28a745;">Завершено</span>
+                {% elif search_status == "failed" %}
+                    <span style="color: #dc3545;">Помилка</span>
+                {% endif %}
+            </div>
+            <button class="decisions-count" onclick="location.reload();" title="Оновити статус" style="cursor: pointer; border: none;">
+                🔄 Оновити
+            </button>
+        </div>
+        {% endif %}
+    </div>
+    
+    {% if court_decisions %}
+    
+    <!-- ТАБЛИЦЯ НА 100% ШИРИНИ З УСІМА СТОВБЦЯМИ -->
+    <div class="table-container">
+        <!-- Фіксована шапка -->
+        <div class="table-header-fixed">
+            <table class="decisions-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">ID документа</th>
+                        <th style="width: 10%;">Назва суду</th>
+                        <th style="width: 8%;">Вид рішення</th>
+                        <th style="width: 8%;">Вид судочинства</th>
+                        <th style="width: 8%;">Категорія справи</th>
+                        <th style="width: 8%;">Номер справи</th>
+                        <th style="width: 5%;">Дата ухвалення</th>
+                        <th style="width: 8%;">Суддя</th>
+                        <th style="width: 5%;">Посилання</th>
+                        <th style="width: 35%;">Резолютивна частина</th>
+                    </tr>
+                </thead>
+            </table>
+        </div>
+
+        <!-- Скролювальне тіло таблиці -->
+        <div class="table-body-scrollable">
+            <table class="decisions-table">
+                <tbody>
+                    {% for decision in court_decisions %}
+                    <tr class="decision-row">
+                        <td style="width: 5%;">
+                            {% if decision.doc_id and decision.doc_id != "nan" %}
+                                <a href="https://reyestr.court.gov.ua/Review/{{ decision.doc_id }}" 
+                                   target="_blank" class="doc-id-link">{{ decision.doc_id }}</a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td style="width: 10%;">{{ decision.court_name|default:"-" }}</td>
+                        <td style="width: 8%;" class="{% if "Постанова" in decision.judgment_name or "Рішення" in decision.judgment_name or "Судовий наказ" in decision.judgment_name %}highlight-decision{% endif %}">
+                            {{ decision.judgment_name|default:"-" }}
+                        </td>
+                        <td style="width: 8%;">{{ decision.justice_kind_name|default:"-" }}</td>
+                        <td style="width: 8%;">{{ decision.category_name|default:"-" }}</td>
+                        <td style="width: 8%;"><strong>{{ decision.cause_num|default:"-" }}</strong></td>
+                        <td style="width: 5%;">{{ decision.adjudication_date|default:"-" }}</td>
+                        <td style="width: 8%;">{{ decision.judge|default:"-" }}</td>
+                        <td style="width: 5%;">
+                            {% if decision.doc_url and decision.doc_url != "nan" %}
+                                <a href="{{ decision.doc_url }}" target="_blank" class="doc-link">{{ decision.doc_url|truncatechars:8 }}</a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td style="width: 35%; {% if decision.should_highlight_red %}background-color: #FF0000 !important;{% endif %}" class="resolution-cell {% if decision.should_highlight_red %}highlight-critical-combination{% endif %}">
+                            {% if decision.resolution_text and decision.resolution_text != "-" and decision.resolution_text != "Резолютивна частина не знайдена" and decision.resolution_text != "Не вдалося завантажити документ" %}
+                                <div class="resolution-text {% if decision.should_highlight_red %}highlight-critical-combination{% endif %}" 
+                                     style="{% if decision.should_highlight_red %}background-color: #FF0000 !important; color: white !important; font-weight: bold !important; padding: 5px; border-radius: 3px;{% endif %}" 
+                                     id="resolution-{{ forloop.counter }}">
+                                    {{ decision.resolution_text }}
+                                </div>
+                                <button class="expand-toggle" id="toggle-{{ forloop.counter }}" onclick="toggleResolution({{ forloop.counter }})">
+                                    Більше
+                                </button>
+                            {% elif decision.doc_url and decision.doc_url != "nan" %}
+                                <span style="color: #ffc107;">Очікує витягування</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    {% else %}
+    <div class="no-decisions">
+        <h3>Судові рішення ще не знайдено</h3>
+        <p>Система продовжує пошук судових рішень по справі {{ case.case_number }}.<br>
+           Результати з"являться автоматично після завершення пошуку в базах даних.</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <a href="{% url "bankruptcy:case_list" %}" class="btn btn-secondary">← Повернутися до списку</a>
+    </div>
+</div>
+
+<script>
+// Функція для розгортання/згортання резолютивної частини
+function toggleResolution(id) {
+    console.log(`=== TOGGLE RESOLUTION ===`);
+    console.log(`Input ID: ${id}, Type: ${typeof id}`);
+    
+    const resolutionText = document.getElementById(`resolution-${id}`);
+    const toggleBtn = document.getElementById(`toggle-${id}`);
+    
+    console.log(`Found resolutionText: ${!!resolutionText}, toggleBtn: ${!!toggleBtn}`);
+    
+    if (!resolutionText || !toggleBtn) {
+        console.log(`Elements not found for ID: ${id}`);
+        return;
+    }
+    
+    const isExpanded = resolutionText.classList.contains("expanded");
+    console.log(`Current state - expanded: ${isExpanded}`);
+    
+    if (isExpanded) {
+        // Згортаємо - повертаємо truncated стилі
+        resolutionText.classList.remove("expanded");
+        resolutionText.style.display = "-webkit-box";
+        resolutionText.style.webkitLineClamp = "7";
+        resolutionText.style.webkitBoxOrient = "vertical";
+        resolutionText.style.overflow = "hidden";
+        resolutionText.style.textOverflow = "ellipsis";
+        resolutionText.style.maxHeight = "9.1em";
+        toggleBtn.textContent = "Більше";
+        console.log(`Collapsed text for ID: ${id}`);
+    } else {
+        // Розгортаємо - прибираємо truncation
+        resolutionText.classList.add("expanded");
+        resolutionText.style.display = "block";
+        resolutionText.style.webkitLineClamp = "unset";
+        resolutionText.style.webkitBoxOrient = "unset";
+        resolutionText.style.overflow = "visible";
+        resolutionText.style.textOverflow = "unset";
+        resolutionText.style.maxHeight = "none";
+        toggleBtn.textContent = "Менше";
+        console.log(`Expanded text for ID: ${id}`);
+    }
+}
+
+// Функція для показу кнопок тільки там, де текст довгий
+function showNecessaryToggleButtons() {
+    console.log("=== ПЕРЕВІРКА КНОПОК РОЗГОРТАННЯ ===");
+    
+    document.querySelectorAll(".resolution-text").forEach((element, index) => {
+        const elementId = element.id;
+        const toggleBtnId = elementId.replace("resolution-", "toggle-");
+        const toggleBtn = document.getElementById(toggleBtnId);
+        
+        if (!toggleBtn) {
+            console.log(`Кнопка ${toggleBtnId} не знайдена для елемента ${elementId}`);
+            return;
+        }
+        
+        // Отримуємо текстовий вміст
+        const textContent = element.textContent || element.innerText || "";
+        const textLength = textContent.trim().length;
+        
+        console.log(`Елемент ${elementId}: довжина тексту = ${textLength} символів`);
+        
+        // Застосовуємо truncation стилі
+        element.style.display = "-webkit-box";
+        element.style.webkitLineClamp = "7";
+        element.style.webkitBoxOrient = "vertical";
+        element.style.overflow = "hidden";
+        element.style.textOverflow = "ellipsis";
+        element.style.maxHeight = "9.1em";
+        element.style.lineHeight = "1.3";
+        
+        // Простіший підхід - показуємо кнопку для тексту довше 300 символів
+        if (textLength > 300) {
+            toggleBtn.style.display = "block";
+            toggleBtn.classList.add("visible");
+            console.log(`Показуємо кнопку для ${elementId} (довжина: ${textLength})`);
+        } else {
+            console.log(`Кнопка для ${elementId} залишається прихованою (довжина: ${textLength})`);
+        }
+    });
+}
+
+// Запускаємо перевірку після завантаження сторінки
+document.addEventListener("DOMContentLoaded", function() {
+    console.log("=== DOM LOADED ===");
+    
+    // Перевіряємо скільки резолютивних текстів є на сторінці
+    const allResolutionTexts = document.querySelectorAll(".resolution-text");
+    console.log(`Знайдено ${allResolutionTexts.length} резолютивних текстів`);
+    
+    allResolutionTexts.forEach((el, index) => {
+        console.log(`${index + 1}. ID: ${el.id}, довжина тексту: ${(el.textContent || "").length} символів`);
+    });
+    
+    const allToggleButtons = document.querySelectorAll(".expand-toggle");
+    console.log(`Знайдено ${allToggleButtons.length} кнопок розгортання`);
+    
+    setTimeout(() => {
+        showNecessaryToggleButtons();
+        
+        // Перевіряємо чи кнопки створилися правильно
+        setTimeout(() => {
+            const visibleButtons = document.querySelectorAll(".expand-toggle.visible");
+            console.log(`Видимих кнопок після ініціалізації: ${visibleButtons.length}`);
+            
+            visibleButtons.forEach((btn, index) => {
+                console.log(`Кнопка ${index + 1}: ID=${btn.id}, текст="${btn.textContent}"`);
+            });
+            
+            // Тестуємо першу видиму кнопку
+            if (visibleButtons.length > 0) {
+                console.log("=== ТЕСТ ПЕРШОЇ КНОПКИ ===");
+                const firstBtn = visibleButtons[0];
+                console.log(`Тестуємо кнопку: ${firstBtn.id}`);
+                
+                // Симулюємо клік через 2 секунди
+                setTimeout(() => {
+                    console.log("Симулюю клік по кнопці...");
+                    firstBtn.click();
+                }, 2000);
+            }
+        }, 500);
+    }, 300);
+});
+
+// СИНХРОНІЗАЦІЯ ГОРИЗОНТАЛЬНОГО СКРОЛУ МІЖ ШАПКОЮ ТА ТІЛОМ ТАБЛИЦІ
+function initTableScrollSync() {
+    const headerScroll = document.querySelector(".table-header-fixed");
+    const bodyScroll = document.querySelector(".table-body-scrollable");
+    
+    if (headerScroll && bodyScroll) {
+        // Синхронізація скролу від шапки до тіла
+        headerScroll.addEventListener("scroll", function() {
+            if (bodyScroll.scrollLeft !== headerScroll.scrollLeft) {
+                bodyScroll.scrollLeft = headerScroll.scrollLeft;
+            }
+        });
+        
+        // Синхронізація скролу від тіла до шапки
+        bodyScroll.addEventListener("scroll", function() {
+            if (headerScroll.scrollLeft !== bodyScroll.scrollLeft) {
+                headerScroll.scrollLeft = bodyScroll.scrollLeft;
+            }
+        });
+    }
+}
+
+// Ініціалізуємо синхронізацію скролу
+document.addEventListener("DOMContentLoaded", initTableScrollSync);
+</script>
+{% endblock %}

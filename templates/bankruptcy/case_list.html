@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+
+{% block title %}Список справ - Аналіз клієнтів{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Стилі для фіксованої висоти сторінки без скролу */
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
+.main-container {
+    height: calc(100vh - 56px); /* Враховуємо навігацію */
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Компактний заголовок */
+.page-header {
+    margin-bottom: 4px;
+    flex-shrink: 0;
+}
+
+.page-header h1 {
+    font-size: 1.3rem;
+    margin-bottom: 2px;
+}
+
+/* Компактні фільтри */
+.filters-card {
+    margin-bottom: 3px;
+    flex-shrink: 0; /* Не дозволяємо стискати фільтри */
+}
+
+.filters-card .card-header {
+    padding: 3px 8px;
+    background: #f8f9fa;
+}
+
+.filters-card .card-header h5 {
+    font-size: 0.8rem;
+    margin-bottom: 0;
+}
+
+.filters-card .card-body {
+    padding: 6px 8px;
+}
+
+.filters-card .form-label {
+    font-size: 0.85rem;
+    margin-bottom: 3px;
+}
+
+.filters-card .form-control,
+.filters-card .form-select {
+    font-size: 0.85rem;
+    padding: 4px 8px;
+}
+
+.filters-card .btn {
+    font-size: 0.85rem;
+    padding: 5px 12px;
+}
+
+/* Статистика записів */
+.records-stats {
+    font-size: 0.75rem;
+    margin-bottom: 2px;
+    padding: 1px 0;
+    color: #6c757d;
+    flex-shrink: 0; /* Не дозволяємо стискати статистику */
+}
+
+/* Контейнер таблиці з фіксованою висотою */
+.table-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-bottom: 40px; /* Залишаємо місце для пагінації */
+}
+
+/* Шапка таблиці - фіксована */
+.table-header {
+    background: #343a40;
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.table-header th {
+    padding: 8px 6px;
+    border: none;
+    white-space: nowrap;
+}
+
+/* Скролівний контейнер з даними */
+.table-data-container {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-top: none;
+}
+
+.table-data {
+    margin-bottom: 0;
+    font-size: 0.75rem;
+}
+
+.table-data td {
+    padding: 6px 6px;
+    border-top: 1px solid #dee2e6;
+    vertical-align: middle;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow: visible;
+}
+
+.table-data tbody tr:hover {
+    background-color: #f5f5f5;
+}
+
+/* Кнопки */
+.btn-sm {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+}
+
+/* Пагінація */
+.pagination-container {
+    position: absolute;
+    bottom: 0;
+    left: 8px;
+    right: 8px;
+    padding: 4px 0;
+    background: white;
+    border-top: 1px solid #dee2e6;
+    z-index: 10;
+}
+
+.pagination .page-link {
+    font-size: 0.8rem;
+    padding: 4px 8px;
+}
+
+/* Ширина колонок */
+.col-num { width: 60px; }
+.col-date { width: 90px; }
+.col-case { width: 140px; }
+.col-edrpou { width: 100px; }
+.col-company { width: auto; min-width: 250px; }
+.col-type { width: auto; min-width: 200px; }
+.col-court { width: auto; min-width: 180px; }
+.col-actions { width: 80px; }
+</style>
+{% endblock %}
+
+{% block main_content %}
+<div class="main-container">
+    <!-- Компактний заголовок -->
+    <div class="page-header">
+        <h1>Справи про банкрутство</h1>
+    </div>
+
+    <!-- Компактні фільтри -->
+    <div class="card filters-card">
+        <div class="card-header">
+            <h5>Фільтри</h5>
+        </div>
+        <div class="card-body">
+            <form method="get">
+                <div class="row">
+                    <!-- Номер справи -->
+                    <div class="col-md-2 mb-1">
+                        <label for="case_number" class="form-label">Номер справи</label>
+                        <input type="text" name="case_number" id="case_number" class="form-control" 
+                               value="{{ selected_case_number|default:"" }}" placeholder="Введіть номер">
+                    </div>
+
+                    <!-- ЄДРПОУ -->
+                    <div class="col-md-2 mb-2">
+                        <label for="edrpou" class="form-label">ЄДРПОУ</label>
+                        <input type="text" name="edrpou" id="edrpou" class="form-control" 
+                               value="{{ selected_edrpou|default:"" }}" placeholder="Введіть код">
+                    </div>
+
+                    <!-- Підприємство -->
+                    <div class="col-md-3 mb-2">
+                        <label for="company" class="form-label">Підприємство</label>
+                        <input type="text" name="company" id="company" class="form-control" 
+                               value="{{ selected_company|default:"" }}" placeholder="Введіть назву">
+                    </div>
+
+                    <!-- Суд -->
+                    <div class="col-md-2 mb-2">
+                        <label for="court" class="form-label">Суд</label>
+                        <select name="court" id="court" class="form-select">
+                            <option value="">Всі</option>
+                            {% for court in courts %}
+                            <option value="{{ court.id }}" {% if selected_court == court.id|stringformat:"s" %}selected{% endif %}>
+                                {{ court.name|truncatechars:30 }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Тип провадження -->
+                    <div class="col-md-3 mb-2">
+                        <label for="type" class="form-label">Тип провадження</label>
+                        <select name="type" id="type" class="form-select">
+                            <option value="">Всі типи</option>
+                            {% for case_type in case_types %}
+                            <option value="{{ case_type }}" {% if selected_type == case_type %}selected{% endif %}>
+                                {{ case_type|truncatechars:50 }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <!-- Дати -->
+                    <div class="col-md-2 mb-2">
+                        <label for="exact_date" class="form-label">Конкретна дата</label>
+                        <input type="date" name="exact_date" id="exact_date" class="form-control"
+                               value="{% if selected_exact_date and selected_exact_date != 'None' %}{{ selected_exact_date }}{% endif %}">
+                    </div>
+
+                    <div class="col-md-2 mb-2">
+                        <label for="date_from" class="form-label">Дата від</label>
+                        <input type="date" name="date_from" id="date_from" class="form-control"
+                               value="{% if selected_date_from and selected_date_from != 'None' %}{{ selected_date_from }}{% endif %}">
+                    </div>
+
+                    <div class="col-md-2 mb-2">
+                        <label for="date_to" class="form-label">Дата до</label>
+                        <input type="date" name="date_to" id="date_to" class="form-control"
+                               value="{% if selected_date_to and selected_date_to != 'None' %}{{ selected_date_to }}{% endif %}">
+                    </div>
+
+                    <!-- Кнопки -->
+                    <div class="col-md-6 mb-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary me-2">Застосувати</button>
+                        <a href="{% url "bankruptcy:case_list" %}" class="btn btn-secondary">Скинути</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Статистика записів -->
+    <div class="records-stats">
+        <strong>Показано записів: {{ total_filtered_records }}</strong>
+        {% if total_filtered_records != page_obj.paginator.count %}
+            (відфільтровано з загальної кількості)
+        {% endif %}
+    </div>
+
+    <!-- Таблиця -->
+    <div class="table-container">
+        <!-- Фіксована шапка таблиці -->
+        <table class="table table-header">
+            <thead>
+                <tr>
+                    <th class="col-num">№</th>
+                    <th class="col-date">Дата</th>
+                    <th class="col-case">Номер справи</th>
+                    <th class="col-edrpou">ЄДРПОУ</th>
+                    <th class="col-company">Підприємство</th>
+                    <th class="col-type">Тип провадження</th>
+                    <th class="col-court">Суд</th>
+                    <th class="col-actions">Дії</th>
+                </tr>
+            </thead>
+        </table>
+
+        <!-- Скролівний контейнер з даними -->
+        <div class="table-data-container">
+            <table class="table table-data table-striped table-hover">
+                <colgroup>
+                    <col class="col-num">
+                    <col class="col-date">
+                    <col class="col-case">
+                    <col class="col-edrpou">
+                    <col class="col-company">
+                    <col class="col-type">
+                    <col class="col-court">
+                    <col class="col-actions">
+                </colgroup>
+                <tbody>
+                    {% for case in page_obj %}
+                    <tr>
+                        <td>{{ case.number }}</td>
+                        <td>{{ case.date|date:"d.m.Y" }}</td>
+                        <td>{{ case.case_number }}</td>
+                        <td>{{ case.company.edrpou }}</td>
+                        <td>{{ case.company.name }}</td>
+                        <td>{{ case.type }}</td>
+                        <td>{{ case.court.name }}</td>
+                        <td>
+                            <a href="{% url "bankruptcy:case_detail" case.number %}" class="btn btn-sm btn-outline-primary">
+                                Деталі
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center">Немає справ для відображення</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Пагінація -->
+    {% if page_obj.has_other_pages %}
+    <div class="pagination-container">
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1{% if selected_court %}&court={{ selected_court }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_case_number %}&case_number={{ selected_case_number }}{% endif %}{% if selected_edrpou %}&edrpou={{ selected_edrpou }}{% endif %}{% if selected_company %}&company={{ selected_company }}{% endif %}{% if selected_date_from %}&date_from={{ selected_date_from }}{% endif %}{% if selected_date_to %}&date_to={{ selected_date_to }}{% endif %}{% if selected_exact_date %}&exact_date={{ selected_exact_date }}{% endif %}">Перша</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_court %}&court={{ selected_court }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_case_number %}&case_number={{ selected_case_number }}{% endif %}{% if selected_edrpou %}&edrpou={{ selected_edrpou }}{% endif %}{% if selected_company %}&company={{ selected_company }}{% endif %}{% if selected_date_from %}&date_from={{ selected_date_from }}{% endif %}{% if selected_date_to %}&date_to={{ selected_date_to }}{% endif %}{% if selected_exact_date %}&exact_date={{ selected_exact_date }}{% endif %}">Попередня</a>
+                    </li>
+                {% endif %}
+
+                <li class="page-item active">
+                    <span class="page-link">
+                        Сторінка {{ page_obj.number }} з {{ page_obj.paginator.num_pages }}
+                    </span>
+                </li>
+
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_court %}&court={{ selected_court }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_case_number %}&case_number={{ selected_case_number }}{% endif %}{% if selected_edrpou %}&edrpou={{ selected_edrpou }}{% endif %}{% if selected_company %}&company={{ selected_company }}{% endif %}{% if selected_date_from %}&date_from={{ selected_date_from }}{% endif %}{% if selected_date_to %}&date_to={{ selected_date_to }}{% endif %}{% if selected_exact_date %}&exact_date={{ selected_exact_date }}{% endif %}">Наступна</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if selected_court %}&court={{ selected_court }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_case_number %}&case_number={{ selected_case_number }}{% endif %}{% if selected_edrpou %}&edrpou={{ selected_edrpou }}{% endif %}{% if selected_company %}&company={{ selected_company }}{% endif %}{% if selected_date_from %}&date_from={{ selected_date_from }}{% endif %}{% if selected_date_to %}&date_to={{ selected_date_to }}{% endif %}{% if selected_exact_date %}&exact_date={{ selected_exact_date }}{% endif %}">Остання</a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

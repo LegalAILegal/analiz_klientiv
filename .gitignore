@@ -1,0 +1,82 @@
+# Python
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# Django
+*.log
+*.pot
+*.pyc
+__pycache__/
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+/media
+/staticfiles
+/static
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+logs/
+*.log
+monitor_pid.txt
+
+# Temporary files
+temp_documents/
+*.tmp
+
+# Data files (великі CSV файли)
+data/*.csv
+
+# Test files
+test_*.html
+
+# System files
+=3.0.0
+
+# SR_AI and reference projects (read-only)
+SR_AI/
+project_courtagent.pro_production/
+
+# Service files
+*.service

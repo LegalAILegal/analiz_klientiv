@@ -1,0 +1,612 @@
+{% extends "base.html" %}
+
+{% block title %}Головна - Аналіз клієнтів{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Стилі для фіксованої висоти сторінки без скролу */
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
+.main-container {
+    height: calc(100vh - 56px); /* Враховуємо навігацію */
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    overflow: hidden;
+}
+
+/* Компактні стилі */
+.page-header {
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.page-header h1 {
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+}
+
+.stats-section {
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.stats-section .row {
+    display: flex;
+    align-items: stretch;
+}
+
+.stats-section .card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.stats-section .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+
+.card-header {
+    padding: 3px 5px;
+    font-size: 0.85rem;
+}
+
+.card-body {
+    padding: 3px 5px;
+}
+
+.card-title {
+    font-size: 1.2rem;
+    margin-bottom: 2px;
+}
+
+.card-text {
+    font-size: 0.8rem;
+    margin-bottom: 0;
+}
+
+/* Додаткові статистичні секції */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 5px;
+    margin-bottom: 8px;
+    align-items: stretch;
+}
+
+.stat-card {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 3px 5px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.stat-card h6 {
+    font-size: 0.75rem;
+    margin-bottom: 2px;
+    color: #6c757d;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.stat-value {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #495057;
+    margin-bottom: 2px;
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-bottom: 2px;
+}
+
+/* Секції статистики */
+.stats-section {
+    margin-bottom: 8px;
+}
+
+.stats-section-detailed {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow: hidden;
+}
+
+.stats-section-detailed > div {
+    background: #fafbfc;
+    border: 1px solid #e8e9ea;
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+}
+
+.stats-section h4, .stats-section-detailed h4 {
+    font-size: 1rem;
+    margin-bottom: 8px;
+    color: #495057;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 2px;
+}
+
+/* Розділення блоків */
+.period-info {
+    font-size: 0.65rem;
+    color: #6c757d;
+    margin-bottom: 4px;
+    font-style: italic;
+}
+
+.card {
+    margin-bottom: 8px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border: 1px solid #e8e9ea !important;
+}
+
+.card:hover {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    transition: box-shadow 0.2s ease;
+}
+
+/* Карусель для судів */
+.courts-carousel {
+    position: relative;
+    overflow: hidden;
+}
+
+.courts-carousel-container {
+    display: flex;
+    transition: transform 0.3s ease;
+    width: 100%;
+}
+
+.courts-carousel-page {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 5px;
+    width: 100%;
+    flex-shrink: 0;
+}
+
+.carousel-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 10px;
+    gap: 10px;
+}
+
+.carousel-btn {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.carousel-btn:hover {
+    background: #e9ecef;
+}
+
+.carousel-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.carousel-info {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+</style>
+{% endblock %}
+
+{% block main_content %}
+<div class="main-container">
+    <!-- Компактний заголовок -->
+    <div class="page-header">
+        <h1>Система аналізу справ про банкрутство</h1>
+    </div>
+
+    <!-- Загальна статистика -->
+    <div>
+        <h4>📊 Загальна статистика</h4>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h6>За весь період (з {{ date_range.min_date|date:"d.m.Y" }} по {{ date_range.max_date|date:"d.m.Y" }})</h6>
+                <div class="stat-label"><span class="stat-value">{{ total_cases }}</span> записів, з яких:</div>
+                <div style="font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px;">
+                    {% for type_stat in total_case_types_stats %}
+                        <div style="margin-bottom: 1px;">{{ type_stat.type }} - {{ type_stat.count }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="stat-card">
+                <h6>Поточний рік ({{ current_year }})</h6>
+                <div class="stat-label"><span class="stat-value">{{ current_year_cases }}</span> записів, з яких:</div>
+                <div style="font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px;">
+                    {% for type_stat in current_year_case_types %}
+                        <div style="margin-bottom: 1px;">{{ type_stat.type }} - {{ type_stat.count }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="stat-card">
+                <h6>Попередній рік ({{ current_year|add:"-1" }})</h6>
+                <div class="stat-label"><span class="stat-value">{{ prev_year_cases }}</span> записів, з яких:</div>
+                <div style="font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px;">
+                    {% for type_stat in prev_year_case_types %}
+                        <div style="margin-bottom: 1px;">{{ type_stat.type }} - {{ type_stat.count }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="stat-card">
+                <h6>За останні 30 днів</h6>
+                <div class="stat-label"><span class="stat-value">{{ recent_cases_count }}</span> записів, з яких:</div>
+                <div style="font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px;">
+                    {% for type_stat in recent_case_types %}
+                        <div style="margin-bottom: 1px;">{{ type_stat.type }} - {{ type_stat.count }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Статистика моніторингу в реальному часі -->
+    <div class="stats-section">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card border-info">
+                    <div class="card-body">
+                        <h4>🔍 Моніторинг пошуку судових рішень</h4>
+                        <div id="monitoring-stats" class="stats-grid">
+                            <div class="stat-card">
+                                <h6>Справи без рішень</h6>
+                                <div class="stat-label">
+                                    <span id="cases-without-decisions" class="stat-value">-</span> з 
+                                    <span id="total-cases" class="stat-value">-</span>
+                                </div>
+                                <div class="progress" style="height: 6px; margin-top: 4px;">
+                                    <div id="cases-progress" class="progress-bar bg-warning" role="progressbar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <h6>Судові рішення</h6>
+                                <div class="stat-label">
+                                    <span id="total-decisions" class="stat-value">-</span> знайдено
+                                </div>
+                                <div style="font-size: 0.7em; line-height: 1.3; margin-top: 2px;">
+                                    <div class="text-success">✅ <span id="decisions-with-resolutions" class="stat-value">-</span> з резолютивними частинами</div>
+                                    <div class="text-warning">⚠️ <span id="decisions-without-resolutions" class="stat-value">-</span> без резолютивних частин</div>
+                                    <div class="text-danger">❌ <span id="decisions-without-rtf" class="stat-value">-</span> без RTF файлів</div>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <h6>Поточний стан</h6>
+                                <div id="current-status" class="stat-label">
+                                    <span class="badge badge-secondary">Ініціалізація...</span>
+                                </div>
+                                <div id="progress-info" class="text-muted" style="font-size: 0.75em; margin-top: 2px;"></div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <h6>Останнє оновлення</h6>
+                                <div id="last-updated" class="stat-label" style="font-size: 0.85em;">
+                                    <span class="text-muted">Завантаження...</span>
+                                </div>
+                                <div style="font-size: 0.7em; margin-top: 2px;">
+                                    <div id="last-search" class="text-muted">Пошук: -</div>
+                                    <div id="last-extraction" class="text-muted">Витягування: -</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Детальна статистика -->
+    <div class="stats-section-detailed">
+
+        <!-- Статистика за останні 6 місяців -->
+        <div>
+            <h4>📊 Статистика за останні 6 місяців</h4>
+            <div class="stats-grid">
+                {% for month_stat in last_6_months_stats %}
+                <div class="stat-card">
+                    <h6>{{ month_stat.month }} {{ month_stat.year }}</h6>
+                    <div class="stat-label"><span class="stat-value">{{ month_stat.count }}</span> записів, з яких:</div>
+                    {% if month_stat.count > 0 %}
+                    <div style="font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px;">
+                        {% for type_stat in month_stat.types %}
+                            <div style="margin-bottom: 1px;">{{ type_stat.type }} - {{ type_stat.count }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Топ суди з фільтрами -->
+        <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                <h4>🏛️ ТОП-5 Судів за кількістю справ</h4>
+                <form method="GET" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <!-- Спадне меню завжди видиме -->
+                    <select name="courts_period" onchange="handlePeriodChange(this)" style="font-size: 0.8rem; padding: 2px 5px;">
+                        <option value="all" {% if courts_period == "all" %}selected{% endif %}>За весь період</option>
+                        <option value="1_year" {% if courts_period == "1_year" %}selected{% endif %}>За останній рік</option>
+                        <option value="2_years" {% if courts_period == "2_years" %}selected{% endif %}>За останні 2 роки</option>
+                        <option value="3_years" {% if courts_period == "3_years" %}selected{% endif %}>За останні 3 роки</option>
+                        <option value="5_years" {% if courts_period == "5_years" %}selected{% endif %}>За останні 5 років</option>
+                        <option value="10_years" {% if courts_period == "10_years" %}selected{% endif %}>За останні 10 років</option>
+                        <option value="15_years" {% if courts_period == "15_years" %}selected{% endif %}>За останні 15 років</option>
+                        <option value="20_years" {% if courts_period == "20_years" %}selected{% endif %}>За останні 20 років</option>
+                        <option value="custom" {% if courts_period == "custom" %}selected{% endif %}>За період</option>
+                    </select>
+                    
+                    <!-- Поля вибору періоду завжди видимі -->
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <label style="font-size: 0.75rem; color: #6c757d;">З:</label>
+                        <input type="date" name="courts_date_from" value="{% if courts_date_from and courts_date_from != 'None' %}{{ courts_date_from }}{% endif %}" style="font-size: 0.8rem; padding: 2px 5px;">
+                        <label style="font-size: 0.75rem; color: #6c757d;">По:</label>
+                        <input type="date" name="courts_date_to" value="{% if courts_date_to and courts_date_to != 'None' %}{{ courts_date_to }}{% endif %}" style="font-size: 0.8rem; padding: 2px 5px;">
+                        <button type="submit" style="font-size: 0.8rem; padding: 2px 8px;">Застосувати</button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Карусель судів -->
+            <div class="courts-carousel" id="courtsCarousel">
+                <div class="courts-carousel-container" id="courtsContainer">
+                    <!-- Сторінки каруселі будуть генеруватися JavaScript -->
+                </div>
+            </div>
+            
+            <!-- Елементи управління каруселлю -->
+            <div class="carousel-controls">
+                <button class="carousel-btn" id="prevBtn" onclick="prevPage()">← Попередні</button>
+                <span class="carousel-info" id="pageInfo">Сторінка 1 з 1</span>
+                <button class="carousel-btn" id="nextBtn" onclick="nextPage()">Наступні →</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// Дані судів з шаблону Django  
+const courtsData = [
+    {% for court_data in top_courts %}
+    {
+        court: {
+            name: "{{ court_data.court.name|escapejs }}"
+        },
+        cases_count: {{ court_data.cases_count }},
+        types: [
+            {% for type_stat in court_data.types %}
+            {
+                type: "{{ type_stat.type|escapejs }}",
+                count: {{ type_stat.count }}
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ]
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+let currentPage = 0;
+const itemsPerPage = 5; // Показуємо по 5 судів на сторінці
+const totalPages = Math.ceil(courtsData.length / itemsPerPage);
+
+function createCourtCard(courtData) {
+    let typesHtml = "";
+    if (courtData.cases_count > 0 && courtData.types) {
+        courtData.types.forEach(typeStat => {
+            typesHtml += `<div style="margin-bottom: 1px;">${typeStat.type} - ${typeStat.count}</div>`;
+        });
+    }
+    
+    return `
+        <div class="stat-card">
+            <h6>${courtData.court.name}</h6>
+            <div class="stat-label"><span class="stat-value">${courtData.cases_count}</span> записів, з яких:</div>
+            ${courtData.cases_count > 0 ? `
+            <div style="font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px;">
+                ${typesHtml}
+            </div>
+            ` : ""}
+        </div>
+    `;
+}
+
+function renderCarousel() {
+    const container = document.getElementById("courtsContainer");
+    const pageInfo = document.getElementById("pageInfo");
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    
+    if (!container || courtsData.length === 0) return;
+    
+    // Очищуємо контейнер
+    container.innerHTML = "";
+    
+    // Створюємо сторінки
+    for (let page = 0; page < totalPages; page++) {
+        const pageDiv = document.createElement("div");
+        pageDiv.className = "courts-carousel-page";
+        
+        const startIndex = page * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, courtsData.length);
+        
+        for (let i = startIndex; i < endIndex; i++) {
+            pageDiv.innerHTML += createCourtCard(courtsData[i]);
+        }
+        
+        container.appendChild(pageDiv);
+    }
+    
+    // Оновлюємо позицію каруселі
+    container.style.transform = `translateX(-${currentPage * 100}%)`;
+    
+    // Оновлюємо інформацію про сторінку
+    pageInfo.textContent = `Сторінка ${currentPage + 1} з ${totalPages}`;
+    
+    // Оновлюємо стан кнопок
+    prevBtn.disabled = currentPage === 0;
+    nextBtn.disabled = currentPage >= totalPages - 1;
+}
+
+function nextPage() {
+    if (currentPage < totalPages - 1) {
+        currentPage++;
+        renderCarousel();
+    }
+}
+
+function prevPage() {
+    if (currentPage > 0) {
+        currentPage--;
+        renderCarousel();
+    }
+}
+
+function handlePeriodChange(select) {
+    // Якщо вибрано не "За період" (custom), відразу відправляємо форму
+    if (select.value !== "custom") {
+        select.form.submit();
+    }
+    // Якщо вибрано "За період", користувач заповнює дати та натискає "Застосувати"
+}
+
+// Функції для роботи з моніторингом
+let monitoringInterval;
+
+async function fetchMonitoringStats() {
+    console.log("🔍 Початок завантаження статистики моніторингу...");
+    try {
+        const response = await fetch("/api/monitoring-stats/");
+        const data = await response.json();
+        console.log("📊 Отримані дані:", data);
+
+        if (data.status === "success") {
+            console.log("✅ Успішно отримані дані, оновлюємо інтерфейс...");
+            updateMonitoringDisplay(data.data);
+        } else {
+            console.error("Помилка отримання статистики моніторингу:", data.message);
+        }
+    } catch (error) {
+        console.error("Помилка запиту статистики моніторингу:", error);
+    }
+}
+
+function updateMonitoringDisplay(data) {
+    console.log("🔄 Оновлення інтерфейсу з даними:", data);
+
+    // Перевіряємо наявність елементів
+    const totalCasesEl = document.getElementById("total-cases");
+    const casesWithoutDecisionsEl = document.getElementById("cases-without-decisions");
+    const totalDecisionsEl = document.getElementById("total-decisions");
+
+    console.log("🎯 Знайдені елементи:", {
+        totalCases: totalCasesEl ? "✅" : "❌",
+        casesWithoutDecisions: casesWithoutDecisionsEl ? "✅" : "❌",
+        totalDecisions: totalDecisionsEl ? "✅" : "❌"
+    });
+
+    // Оновлюємо основні показники
+    if (totalCasesEl) totalCasesEl.textContent = data.total_cases.toLocaleString();
+    if (casesWithoutDecisionsEl) casesWithoutDecisionsEl.textContent = data.cases_without_decisions.toLocaleString();
+    if (totalDecisionsEl) totalDecisionsEl.textContent = data.total_decisions.toLocaleString();
+    document.getElementById("decisions-with-resolutions").textContent = data.decisions_with_resolutions.toLocaleString();
+    document.getElementById("decisions-without-resolutions").textContent = data.decisions_without_resolutions.toLocaleString();
+    document.getElementById("decisions-without-rtf").textContent = data.decisions_without_rtf.toLocaleString();
+    
+    // Прогрес-бар для справ з рішеннями
+    const casesProgress = (data.cases_with_decisions / data.total_cases) * 100;
+    document.getElementById("cases-progress").style.width = casesProgress.toFixed(1) + "%";
+    
+    // Поточний стан
+    const statusElement = document.getElementById("current-status");
+    const progressInfoElement = document.getElementById("progress-info");
+    
+    if (data.currently_processing) {
+        statusElement.innerHTML = "<span class='badge badge-primary'>🔄 " + data.processing_type + "</span>";
+        if (data.total_to_process > 0) {
+            progressInfoElement.textContent = `${data.processed_count}/${data.total_to_process} (${data.progress_percentage}%)`;
+        } else {
+            progressInfoElement.textContent = `Оброблено: ${data.processed_count}`;
+        }
+    } else {
+        statusElement.innerHTML = "<span class='badge badge-success'>✅ Очікування</span>";
+        progressInfoElement.textContent = "";
+    }
+    
+    // Час останнього оновлення
+    if (data.last_updated) {
+        const lastUpdated = new Date(data.last_updated);
+        document.getElementById("last-updated").innerHTML = 
+            "<span class='text-success'>" + lastUpdated.toLocaleString("uk-UA") + "</span>";
+    }
+    
+    // Часи останніх операцій
+    const lastSearchElement = document.getElementById("last-search");
+    const lastExtractionElement = document.getElementById("last-extraction");
+    
+    if (data.last_search_run) {
+        const lastSearch = new Date(data.last_search_run);
+        lastSearchElement.textContent = "Пошук: " + lastSearch.toLocaleString("uk-UA");
+    } else {
+        lastSearchElement.textContent = "Пошук: не запускався";
+    }
+    
+    if (data.last_extraction_run) {
+        const lastExtraction = new Date(data.last_extraction_run);
+        lastExtractionElement.textContent = "Витягування: " + lastExtraction.toLocaleString("uk-UA");
+    } else {
+        lastExtractionElement.textContent = "Витягування: не запускалося";
+    }
+}
+
+function startMonitoringUpdates() {
+    // Перше завантаження
+    fetchMonitoringStats();
+    
+    // Оновлюємо кожні 10 секунд
+    monitoringInterval = setInterval(fetchMonitoringStats, 10000);
+}
+
+function stopMonitoringUpdates() {
+    if (monitoringInterval) {
+        clearInterval(monitoringInterval);
+    }
+}
+
+// Ініціалізуємо карусель та моніторинг при завантаженні сторінки
+document.addEventListener("DOMContentLoaded", function() {
+    console.log("🚀 DOM завантажено, ініціалізуємо компоненти...");
+    renderCarousel();
+    startMonitoringUpdates();
+    console.log("✅ Ініціалізація завершена");
+});
+
+// Зупиняємо оновлення при виході зі сторінки
+document.addEventListener("beforeunload", function() {
+    stopMonitoringUpdates();
+});
+</script>
+{% endblock %}

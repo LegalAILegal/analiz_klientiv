@@ -1,0 +1,1339 @@
+{% extends "base.html" %}
+
+{% block title %}Судові рішення - Аналіз клієнтів{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Стилі для фіксованої висоти сторінки без скролу */
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
+.main-container {
+    height: calc(100vh - 56px); /* Враховуємо навігацію */
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    overflow: hidden;
+}
+
+/* Компактні стилі */
+.page-header {
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.page-header h1 {
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+}
+
+.stats-section {
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.stats-section .row {
+    display: flex;
+    align-items: stretch;
+}
+
+.stats-section .card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.stats-section .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+
+.card-header {
+    padding: 3px 5px;
+    font-size: 0.85rem;
+}
+
+.card-body {
+    padding: 3px 5px;
+}
+
+.card-title {
+    font-size: 1.2rem;
+    margin-bottom: 2px;
+}
+
+.card-text {
+    font-size: 0.8rem;
+    margin-bottom: 0;
+}
+
+/* Додаткові статистичні секції */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 6px;
+    margin-bottom: 8px;
+    align-items: stretch;
+}
+
+.stat-card {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 3px 5px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    min-height: 80px;
+    max-height: none;
+    overflow: visible;
+    word-wrap: break-word;
+}
+
+.stat-card h6 {
+    font-size: 0.75rem;
+    margin-bottom: 2px;
+    color: #6c757d;
+    font-weight: 600;
+    text-transform: uppercase;
+    line-height: 1.1;
+}
+
+.stat-value {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #495057;
+    margin-bottom: 2px;
+    line-height: 1.2;
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-bottom: 2px;
+    line-height: 1.1;
+}
+
+/* Секції статистики */
+.stats-section {
+    margin-bottom: 8px;
+}
+
+.stats-section-detailed {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: visible;
+    min-height: 0;
+}
+
+.stats-section-detailed > div {
+    background: #fafbfc;
+    border: 1px solid #e8e9ea;
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 6px;
+    overflow: visible;
+    min-height: 120px;
+}
+
+.stats-section h4, .stats-section-detailed h4 {
+    font-size: 1rem;
+    margin-bottom: 8px;
+    color: #495057;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 2px;
+}
+
+/* Розділення блоків */
+.period-info {
+    font-size: 0.65rem;
+    color: #6c757d;
+    margin-bottom: 4px;
+    font-style: italic;
+}
+
+.card {
+    margin-bottom: 8px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border: 1px solid #e8e9ea !important;
+}
+
+.card:hover {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    transition: box-shadow 0.2s ease;
+}
+
+
+
+.refresh-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    margin-left: 8px;
+}
+
+.refresh-btn:hover {
+    background: #218838;
+}
+
+
+/* Повідомлення */
+.no-data {
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+    padding: 8px;
+    font-size: 0.8rem;
+}
+
+.loading {
+    text-align: center;
+    padding: 8px;
+    color: #6c757d;
+    font-size: 0.8rem;
+}
+
+.error-message {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 6px 8px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+}
+
+.success-message {
+    background: #d4edda;
+    color: #155724;
+    padding: 6px 8px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+}
+
+.auto-refresh-indicator {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background: #28a745;
+    border-radius: 50%;
+    margin-left: 5px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Ієрархічна навігація */
+.breadcrumb-item {
+    display: inline-block;
+    padding: 2px 8px;
+    margin-right: 4px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.breadcrumb-item:hover {
+    background: #e9ecef;
+}
+
+.breadcrumb-item.active {
+    background: #007bff;
+    color: white;
+    cursor: default;
+}
+
+.breadcrumb-item.active:hover {
+    background: #007bff;
+}
+
+.breadcrumb-separator {
+    margin: 0 4px;
+    color: #6c757d;
+}
+
+/* Інтерактивні карточки статистики */
+.stat-card.clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.stat-card.clickable:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+    background: #f8f9fa;
+}
+</style>
+{% endblock %}
+
+{% block main_content %}
+<div class="main-container">
+    <!-- Компактний заголовок -->
+    <div class="page-header">
+        <h1>Судові рішення <span class="auto-refresh-indicator"></span></h1>
+        {% if using_cache %}
+        <div style="font-size: 0.6rem; color: #6c757d; margin-top: 1px;">
+            📊 Дані з кешу (оновлено за київським часом)
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Загальна статистика -->
+    <div>
+        <h4>📊 Загальна статистика судових рішень</h4>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h6>За весь період ({{ available_tables }} баз даних)</h6>
+                <div class="stat-label"><span class="stat-value">{{ total_stats.total_decisions|floatformat:0 }}</span> рішень</div>
+                <div style="font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px;">
+                    <div style="margin-bottom: 1px;">Унікальних судів: {{ total_stats.total_courts }}</div>
+                    {% if total_stats.date_range %}
+                        <div style="margin-bottom: 1px;">Період: {{ total_stats.date_range.min|date:"Y" }} - {{ total_stats.date_range.max|date:"Y" }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Детальна статистика -->
+    <div class="stats-section-detailed">
+
+        <!-- Ієрархічна статистика за роками -->
+        <div>
+            <h4>📊 Статистика за роками <button class="refresh-btn" onclick="refreshHierarchicalStats()">🔄</button></h4>
+            <div id="hierarchical-breadcrumb" style="font-size: 0.65rem; color: #6c757d; margin-bottom: 4px;">
+                <span class="breadcrumb-item active" onclick="loadYearlyStats()">Роки</span>
+            </div>
+
+            <!-- Панель фільтрів для детального перегляду -->
+            <div id="hierarchical-filters" style="display: none; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 8px; margin-bottom: 8px;">
+                <div class="row g-2" style="align-items: end;">
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Рік:</label>
+                        <select id="filter-year" class="form-control form-control-sm">
+                            <option value="">Всі роки</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Вид судочинства:</label>
+                        <select id="filter-justice-kind" class="form-control form-control-sm">
+                            <option value="">Всі види</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Інстанція:</label>
+                        <select id="filter-instance" class="form-control form-control-sm">
+                            <option value="">Всі інстанції</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Форма рішення:</label>
+                        <select id="filter-judgment" class="form-control form-control-sm">
+                            <option value="">Всі форми</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Суд:</label>
+                        <select id="filter-court-stats" class="form-control form-control-sm">
+                            <option value="">Всі суди</option>
+                            <option value="loading" disabled>Завантаження...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2" style="display: flex; align-items: end; gap: 5px;">
+                        <button id="apply-hierarchical-filters" class="btn btn-primary btn-sm" style="font-size: 0.8em; display: none;">Застосувати</button>
+                        <button id="clear-hierarchical-filters" class="btn btn-secondary btn-sm" style="font-size: 0.8em;">Очистити</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-grid" id="hierarchical-stats">
+                <div class="loading">Завантаження даних...</div>
+            </div>
+        </div>
+
+        <!-- Фільтри для списку судових рішень -->
+        <div id="document-filters-section" style="display: none; background: #fff; border: 2px solid #007bff; border-radius: 8px; padding: 15px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="margin-bottom: 10px;">
+                <button id="toggle-filters" class="btn btn-sm btn-outline-secondary">
+                    📋 <span id="filter-toggle-text">Розгорнути</span> фільтри
+                </button>
+            </div>
+
+            <div id="filters-content" style="display: none; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px; margin-bottom: 10px;">
+                <div class="row g-2">
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Точна дата:</label>
+                        <input type="date" id="filter-exact-date" class="form-control form-control-sm">
+                        <small class="text-muted" style="font-size: 0.7em;">або період нижче</small>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Дата від:</label>
+                        <input type="date" id="filter-date-from" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Дата до:</label>
+                        <input type="date" id="filter-date-to" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Номер справи:</label>
+                        <input type="text" id="filter-case-number" class="form-control form-control-sm" placeholder="наприклад, 910/1539">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Суддя:</label>
+                        <input type="text" id="filter-judge" class="form-control form-control-sm" placeholder="Прізвище судді">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Суд:</label>
+                        <select id="filter-court-main" class="form-control form-control-sm">
+                            <option value="">Всі суди</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-2 mt-2">
+                    <div class="col-md-12" style="text-align: right;">
+                        <button id="apply-filters" class="btn btn-primary btn-sm">Застосувати</button>
+                        <button id="clear-filters" class="btn btn-secondary btn-sm">Очистити</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// Глобальні змінні для ієрархічної навігації
+let currentHierarchyLevel = "years";
+let hierarchyData = {
+    year: "",
+    justice_kind: "",
+    instance_code: "",
+    judgment_form: ""
+};
+let refreshInterval;
+
+// Глобальні змінні для фільтрів
+let hierarchicalFilters = {
+    year: "",
+    justice_kind: "",
+    instance_code: "",
+    judgment_code: "",
+    court_code: ""
+};
+
+
+/*
+function addFiltersToggleButton() {
+    const header = document.querySelector('h4'); // Може знайти не той h4
+    console.log("Header found:", header?.textContent);
+    if (header && header.textContent.includes('Статистика за роками') && !document.getElementById('toggle-hierarchical-filters')) {
+        const toggleButton = document.createElement('button');
+        toggleButton.id = 'toggle-hierarchical-filters';
+        toggleButton.className = 'btn btn-outline-secondary btn-sm ms-2';
+        toggleButton.innerHTML = '🔍 Фільтри';
+        toggleButton.style.fontSize = '0.75rem';
+
+        toggleButton.addEventListener('click', function() {
+            const filtersPanel = document.getElementById('hierarchical-filters');
+            if (filtersPanel.style.display === 'none') {
+                showHierarchicalFilters();
+                toggleButton.innerHTML = '🔍 Ховати';
+            } else {
+                hideHierarchicalFilters();
+                toggleButton.innerHTML = '🔍 Фільтри';
+            }
+        });
+
+        header.appendChild(toggleButton);
+    }
+}
+*/
+
+function testLoadYearlyStats() {
+    console.log("Starting test function");
+    const container = document.getElementById("hierarchical-stats");
+    if (!container) {
+        console.error("Container not found!");
+        return;
+    }
+
+    container.innerHTML = "<div>Тест: JavaScript працює!</div>";
+
+    // Простий fetch тест
+    fetch("/api/court-decisions/hierarchical-stats/")
+    .then(function(response) {
+        console.log("Response:", response.status);
+        return response.json();
+    })
+    .then(function(data) {
+        console.log("Data received:", data);
+        if (data.data && data.data.length > 0) {
+            container.innerHTML = "<div>Тест пройшов: отримано " + data.data.length + " років</div>";
+            // Викликаємо справжню функцію
+            setTimeout(function() {
+                loadYearlyStats();
+            }, 2000);
+        } else {
+            container.innerHTML = "<div>Тест: немає даних</div>";
+        }
+    })
+    .catch(function(error) {
+        console.error("Test error:", error);
+        container.innerHTML = "<div>Тест: помилка " + error.message + "</div>";
+    });
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    console.log("DOM loaded, starting simple test");
+
+    // Простий тест завантаження
+    testLoadYearlyStats();
+
+    // Запускаємо автооновлення кожні 5 хвилин
+    refreshInterval = setInterval(refreshAllStats, 300000);
+
+    // Додаємо кнопку переключення фільтрів (відкладемо це)
+    // setTimeout(() => {
+    //     addFiltersToggleButton();
+    // }, 1000);
+});
+
+// Оновлення всієї статистики
+async function refreshAllStats() {
+    showRefreshIndicator();
+    
+    try {
+        const response = await fetch("{% url 'bankruptcy:court_decisions_stats_api' %}");
+        const data = await response.json();
+        
+        // Оновлюємо ТОП судів
+        updateTopCourts(data.top_courts);
+        
+        // Перезавантажуємо ієрархічну статистику
+        await refreshCurrentHierarchyLevel();
+        
+    } catch (error) {
+        console.error("Помилка оновлення статистики:", error);
+    }
+    
+    hideRefreshIndicator();
+}
+
+// Ієрархічна навігація
+async function loadYearlyStats(forceRefresh = false) {
+    currentHierarchyLevel = "years";
+    hierarchyData = { year: "", justice_kind: "", instance_code: "", judgment_form: "" };
+    updateBreadcrumb();
+
+    const container = document.getElementById("hierarchical-stats");
+    container.innerHTML = "<div class='loading'>Завантаження даних за роками...</div>";
+
+    try {
+        const url = new URL("{% url 'bankruptcy:hierarchical_court_decisions_stats_api' %}", window.location.origin);
+        if (forceRefresh) {
+            url.searchParams.set("force_refresh", "true");
+        }
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.data && data.data.length > 0) {
+            displayYearlyStats(data.data);
+        } else {
+            container.innerHTML = "<div class='no-data'>Дані за роками відсутні</div>";
+        }
+    } catch (error) {
+        console.error("Помилка завантаження річної статистики:", error);
+        container.innerHTML = "<div class='error-message'>Помилка завантаження даних</div>";
+    }
+}
+
+function resetContainerStyles() {
+    const container = document.getElementById("hierarchical-stats");
+    // Повертаємо початкові стилі сітки
+    container.style.cssText = '';
+
+    // Приховуємо фільтри для документів
+    const filtersSection = document.getElementById("document-filters-section");
+    if (filtersSection) {
+        filtersSection.style.display = "none";
+    }
+}
+
+function displayYearlyStats(yearsData) {
+    const container = document.getElementById("hierarchical-stats");
+    container.innerHTML = "";
+    resetContainerStyles();
+
+    yearsData.forEach(yearData => {
+        const yearCard = document.createElement("div");
+        yearCard.className = "stat-card clickable";
+        // Використовуємо year_short для URL параметрів
+        yearCard.onclick = () => loadJusticeKindsForYear(yearData.year_short || yearData.year);
+        
+        // Підрахунок загальної кількості по всіх видах судочинства
+        const totalCount = yearData.justice_kinds.reduce((sum, jk) => sum + jk.count, 0);
+        
+        var justiceKindsHtml = yearData.justice_kinds.map(function(jk) {
+            return '<div style="margin-bottom: 1px;">' + jk.name + ': ' + formatNumber(jk.count) + '</div>';
+        }).join("");
+
+        yearCard.innerHTML =
+            '<h6>' + yearData.year + '</h6>' +
+            '<div class="stat-label"><span class="stat-value">' + formatNumber(totalCount) + '</span> рішень</div>' +
+            '<div style="font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px; overflow: visible;">' +
+                justiceKindsHtml +
+            '</div>';
+        container.appendChild(yearCard);
+    });
+}
+
+async function loadJusticeKindsForYear(year, forceRefresh = false) {
+    currentHierarchyLevel = "justice_kinds";
+    hierarchyData.year = year;
+    hierarchyData.justice_kind = "";
+    hierarchyData.instance_code = "";
+    hierarchyData.judgment_form = "";
+    updateBreadcrumb();
+    
+    const container = document.getElementById("hierarchical-stats");
+    container.innerHTML = "<div class='loading'>Завантаження видів судочинства...</div>";
+    
+    try {
+        const url = new URL("{% url 'bankruptcy:hierarchical_court_decisions_stats_api' %}", window.location.origin);
+        url.searchParams.set("year", year);
+        if (forceRefresh) {
+            url.searchParams.set("force_refresh", "true");
+        }
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.data && data.data.length > 0) {
+            displayJusticeKinds(data.data);
+        } else {
+            container.innerHTML = "<div class='no-data'>Немає даних по видах судочинства</div>";
+        }
+    } catch (error) {
+        console.error("Помилка завантаження видів судочинства:", error);
+        container.innerHTML = "<div class='error-message'>Помилка завантаження даних</div>";
+    }
+}
+
+function displayJusticeKinds(justiceKinds) {
+    const container = document.getElementById("hierarchical-stats");
+    container.innerHTML = "";
+    resetContainerStyles();
+    
+    justiceKinds.forEach(jk => {
+        const kindCard = document.createElement("div");
+        kindCard.className = "stat-card clickable";
+        kindCard.onclick = () => loadInstancesForJusticeKind(jk.code, jk.name);
+        
+        kindCard.innerHTML = "<h6>" + jk.name + "</h6>" +
+            "<div class='stat-label'><span class='stat-value'>" + formatNumber(jk.count) + "</span> рішень</div>" +
+            "<div style='font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px; overflow: visible;'>" +
+            (jk.instances && jk.instances.length > 0 ?
+                jk.instances.map(function(inst) {
+                    return "<div style='margin-bottom: 1px;'>" + inst.name + ": " + formatNumber(inst.count) + "</div>";
+                }).join("") :
+                "<div style='margin-bottom: 1px;'>Дані завантажуються...</div>") +
+            "</div>";
+        container.appendChild(kindCard);
+    });
+}
+
+async function loadInstancesForJusticeKind(justiceKind, justiceKindName) {
+    currentHierarchyLevel = "instances";
+    hierarchyData.justice_kind = justiceKind;
+    hierarchyData.justice_kind_name = justiceKindName;
+    hierarchyData.instance_code = "";
+    hierarchyData.judgment_form = "";
+    updateBreadcrumb();
+    
+    const container = document.getElementById("hierarchical-stats");
+    container.innerHTML = "<div class='loading'>Завантаження інстанцій...</div>";
+    
+    try {
+        const url = "{% url 'bankruptcy:hierarchical_court_decisions_stats_api' %}" + "?year=" + hierarchyData.year + "&justice_kind=" + justiceKind;
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.data && data.data.length > 0) {
+            displayInstances(data.data);
+        } else {
+            container.innerHTML = "<div class='no-data'>Немає даних по інстанціях</div>";
+        }
+    } catch (error) {
+        console.error("Помилка завантаження інстанцій:", error);
+        container.innerHTML = "<div class='error-message'>Помилка завантаження даних</div>";
+    }
+}
+
+function displayInstances(instances) {
+    const container = document.getElementById("hierarchical-stats");
+    container.innerHTML = "";
+    resetContainerStyles();
+    
+    instances.forEach(instance => {
+        const instanceCard = document.createElement("div");
+        instanceCard.className = "stat-card clickable";
+        instanceCard.onclick = () => loadJudgmentFormsForInstance(instance.code, instance.name);
+        
+        instanceCard.innerHTML = "<h6>" + instance.name + "</h6>" +
+            "<div class='stat-label'><span class='stat-value'>" + formatNumber(instance.count) + "</span> рішень</div>" +
+            "<div style='font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px; overflow: visible;'>" +
+            (instance.judgment_forms && instance.judgment_forms.length > 0 ?
+                instance.judgment_forms.map(function(jf) {
+                    return "<div style='margin-bottom: 1px;'>" + jf.name + ": " + formatNumber(jf.count) + "</div>";
+                }).join("") :
+                "<div style='margin-bottom: 1px;'>Дані завантажуються...</div>") +
+            "</div>";
+        container.appendChild(instanceCard);
+    });
+}
+
+async function loadJudgmentFormsForInstance(instanceCode, instanceName) {
+    currentHierarchyLevel = "judgment_forms";
+    hierarchyData.instance_code = instanceCode;
+    hierarchyData.instance_name = instanceName;
+    hierarchyData.judgment_form = "";
+    updateBreadcrumb();
+    
+    const container = document.getElementById("hierarchical-stats");
+    container.innerHTML = "<div class='loading'>Завантаження форм рішень...</div>";
+    
+    try {
+        const url = "{% url 'bankruptcy:hierarchical_court_decisions_stats_api' %}" + "?year=" + hierarchyData.year + "&justice_kind=" + hierarchyData.justice_kind + "&instance_code=" + instanceCode;
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.data && data.data.length > 0) {
+            displayJudgmentForms(data.data);
+        } else {
+            container.innerHTML = "<div class='no-data'>Немає даних по формах рішень</div>";
+        }
+    } catch (error) {
+        console.error("Помилка завантаження форм рішень:", error);
+        container.innerHTML = "<div class='error-message'>Помилка завантаження даних</div>";
+    }
+}
+
+function displayJudgmentForms(judgmentForms) {
+    const container = document.getElementById("hierarchical-stats");
+    container.innerHTML = "";
+    resetContainerStyles();
+    
+    judgmentForms.forEach(jf => {
+        const formCard = document.createElement("div");
+        formCard.className = "stat-card clickable";
+        formCard.onclick = () => loadDetailedStats(jf.code, jf.name);
+        
+        formCard.innerHTML = "<h6>" + jf.name + "</h6>" +
+            "<div class='stat-label'><span class='stat-value'>" + formatNumber(jf.count) + "</span> рішень</div>";
+        container.appendChild(formCard);
+    });
+}
+
+async function loadDetailedStats(judgmentForm, judgmentFormName) {
+    currentHierarchyLevel = "decisions";
+    hierarchyData.judgment_form = judgmentForm;
+    hierarchyData.judgment_form_name = judgmentFormName;
+    updateBreadcrumb();
+
+    await loadCourtDecisionsList(1); // Завантажуємо першу сторінку
+}
+
+function displayDetailedStats(details) {
+    const container = document.getElementById("hierarchical-stats");
+    container.innerHTML = "";
+    
+    const detailCard = document.createElement("div");
+    detailCard.className = "stat-card";
+    
+    detailCard.innerHTML = "<h6>Детальна статистика</h6>" +
+        "<div style='font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px;'>" +
+        "<div style='margin-bottom: 1px;'><strong>Всього рішень:</strong> " + formatNumber(details.total_count) + "</div>" +
+        "<div style='margin-bottom: 1px;'><strong>Унікальних судів:</strong> " + formatNumber(details.courts_count) + "</div>" +
+        (details.min_date ? "<div style='margin-bottom: 1px;'><strong>Перше рішення:</strong> " + formatDate(details.min_date) + "</div>" : "") +
+        (details.max_date ? "<div style='margin-bottom: 1px;'><strong>Останнє рішення:</strong> " + formatDate(details.max_date) + "</div>" : "") +
+        "</div>";
+    container.appendChild(detailCard);
+}
+
+async function loadCourtDecisionsList(page = 1) {
+    const container = document.getElementById("hierarchical-stats");
+    container.innerHTML = "<div class='loading'>Завантаження судових рішень...</div>";
+
+    try {
+        const url = new URL("{% url 'bankruptcy:court_decisions_list_api' %}", window.location.origin);
+        url.searchParams.set('year', hierarchyData.year);
+        url.searchParams.set('justice_kind', hierarchyData.justice_kind);
+        url.searchParams.set('instance_code', hierarchyData.instance_code);
+        url.searchParams.set('judgment_code', hierarchyData.judgment_form);
+        url.searchParams.set('page', page.toString());
+        url.searchParams.set('per_page', '100');
+
+        // Додаємо фільтри, якщо вони встановлені
+        if (currentFilters) {
+            Object.keys(currentFilters).forEach(key => {
+                if (currentFilters[key]) {
+                    url.searchParams.set(key, currentFilters[key]);
+                }
+            });
+        }
+
+        // Додаємо ієрархічний фільтр суду, якщо він встановлений
+        if (hierarchicalFilters && hierarchicalFilters.court_code) {
+            url.searchParams.set('court', hierarchicalFilters.court_code);
+        }
+
+        console.log("Fetching court decisions from:", url.toString());
+        console.log("HierarchyData:", hierarchyData);
+        const response = await fetch(url);
+        console.log("Response status:", response.status, response.ok);
+
+        const data = await response.json();
+        console.log("Court decisions data:", data);
+
+        if (data.error) {
+            container.innerHTML = "<div class='error-message'>" + data.error + "</div>";
+            return;
+        }
+
+        displayCourtDecisionsList(data);
+    } catch (error) {
+        console.error('Помилка завантаження судових рішень:', error);
+        container.innerHTML = "<div class='error-message'>Помилка завантаження даних</div>";
+    }
+}
+
+function displayCourtDecisionsList(data) {
+    const container = document.getElementById("hierarchical-stats");
+    container.innerHTML = "";
+
+    // Приховуємо зовнішню секцію фільтрів
+    const externalFiltersSection = document.getElementById("document-filters-section");
+    if (externalFiltersSection) {
+        externalFiltersSection.style.display = "none";
+    }
+
+    // Змінюємо стилі контейнера для відображення таблиці на всю ширину
+    container.style.cssText = 'display: block; width: 100%; max-width: none;';
+
+    if (!data.decisions || data.decisions.length === 0) {
+        container.innerHTML = "<div class='no-data'>Рішення не знайдені</div>";
+        return;
+    }
+
+    // Створюємо фільтри всередині контейнера
+    const filtersDiv = document.createElement('div');
+    filtersDiv.innerHTML = `
+        <div style="background: #fff; border: 2px solid #007bff; border-radius: 8px; padding: 15px; margin: 0 0 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="margin-bottom: 10px;">
+                <button id="toggle-filters" class="btn btn-sm btn-outline-secondary">
+                    📋 <span id="filter-toggle-text">Розгорнути</span> фільтри
+                </button>
+            </div>
+
+            <div id="filters-content" style="display: none; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px; margin-bottom: 10px;">
+                <div class="row g-2">
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Точна дата:</label>
+                        <input type="date" id="filter-exact-date" class="form-control form-control-sm">
+                        <small class="text-muted" style="font-size: 0.7em;">або період нижче</small>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Дата від:</label>
+                        <input type="date" id="filter-date-from" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Дата до:</label>
+                        <input type="date" id="filter-date-to" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Номер справи:</label>
+                        <input type="text" id="filter-case-number" class="form-control form-control-sm" placeholder="наприклад, 910/1539">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Суддя:</label>
+                        <input type="text" id="filter-judge" class="form-control form-control-sm" placeholder="Прізвище судді">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" style="font-size: 0.8em; font-weight: bold;">Суд:</label>
+                        <select id="filter-court-main" class="form-control form-control-sm">
+                            <option value="">Всі суди</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-2 mt-2">
+                    <div class="col-md-12" style="text-align: right;">
+                        <button id="apply-filters" class="btn btn-primary btn-sm">Застосувати</button>
+                        <button id="clear-filters" class="btn btn-secondary btn-sm">Очистити</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(filtersDiv);
+
+    /*
+    // Панель фільтрів - тимчасово закоментовано
+    const filtersPanel = document.createElement('div');
+    filtersPanel.className = 'filters-panel';
+    filtersPanel.innerHTML = '<div>Filters temporarily disabled</div>';
+    container.appendChild(filtersPanel);
+    */
+
+    // Інформаційна панель
+    const infoPanel = document.createElement('div');
+    infoPanel.className = 'info-panel';
+    infoPanel.innerHTML =
+        '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">' +
+            '<h6>Судові рішення (' + formatNumber(data.pagination.total_count) + ')</h6>' +
+            '<div style="font-size: 0.8em; color: #666;">' +
+                'Сторінка ' + data.pagination.page + ' з ' + data.pagination.total_pages +
+            '</div>' +
+        '</div>';
+    container.appendChild(infoPanel);
+
+    // Таблиця рішень
+    const tableContainer = document.createElement('div');
+    tableContainer.className = 'decisions-table-container';
+    tableContainer.style.cssText = 'width: 100%; max-height: 600px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px;';
+
+    const table = document.createElement('table');
+    table.className = 'table table-striped table-sm decisions-table';
+    table.style.cssText = 'width: 100%; table-layout: fixed; margin: 0;';
+    table.innerHTML =
+        "<thead class='table-dark' style='position: sticky; top: 0; z-index: 10;'>" +
+            "<tr>" +
+                "<th style='width: 9%;'>Дата</th>" +
+                "<th style='width: 13%;'>Номер справи</th>" +
+                "<th style='width: 18%;'>Суддя</th>" +
+                "<th style='width: 30%;'>Суд</th>" +
+                "<th style='width: 10%;'>Тип рішення</th>" +
+                "<th style='width: 10%;'>ЄДРСР</th>" +
+                "<th style='width: 10%;'>Документ</th>" +
+            "</tr>" +
+        "</thead>" +
+        "<tbody>" +
+            data.decisions.map(function(decision) {
+                return "<tr>" +
+                    "<td style='font-size: 0.75em; white-space: nowrap;'>" + (decision.adjudication_date ? formatDate(decision.adjudication_date) : '-') + "</td>" +
+                    "<td style='font-size: 0.75em; font-family: monospace; word-break: break-word;'>" + (decision.case_number || '-') + "</td>" +
+                    "<td style='font-size: 0.75em; word-wrap: break-word; overflow-wrap: break-word;'>" + (decision.judge || '-') + "</td>" +
+                    "<td style='font-size: 0.65em; word-wrap: break-word; overflow-wrap: break-word;'>" +
+                        "<div style='font-weight: bold; margin-bottom: 2px;'>" + (decision.court_name || '-') + "</div>" +
+                        (decision.region_code ? "<div style='color: #666; font-size: 0.9em;'>🏛️ Регіон: " + decision.region_code + "</div>" : '') +
+                        (decision.court_code ? "<div style='color: #888; font-size: 0.85em; font-family: monospace;'>Код: " + decision.court_code + "</div>" : '') +
+                    "</td>" +
+                    "<td style='font-size: 0.75em; white-space: nowrap;'>" + (decision.judgment_form_name || '-') + "</td>" +
+                    "<td style='text-align: center;'>" +
+                        (decision.doc_id ?
+                            "<a href='https://reyestr.court.gov.ua/Review/" + decision.doc_id + "' target='_blank' class='btn btn-sm btn-outline-success' style='font-size: 0.6em; padding: 2px 6px;' title='Переглянути в ЄДРСР'>🔍</a>" :
+                            "<span style='color: #999; font-size: 0.7em;'>-</span>"
+                        ) +
+                    "</td>" +
+                    "<td style='text-align: center;'>" +
+                        (decision.doc_url ?
+                            "<a href='" + decision.doc_url + "' target='_blank' class='btn btn-sm btn-outline-primary' style='font-size: 0.6em; padding: 2px 6px;' title='Завантажити RTF документ'>📄</a>" :
+                            "<span style='color: #999; font-size: 0.7em;'>-</span>"
+                        ) +
+                    "</td>" +
+                "</tr>";
+            }).join('') +
+        "</tbody>";
+
+    tableContainer.appendChild(table);
+    container.appendChild(tableContainer);
+
+    // Пагінація
+    if (data.pagination.total_pages > 1) {
+        const pagination = createPagination(data.pagination);
+        container.appendChild(pagination);
+    }
+
+    // Додаємо обробники подій для фільтрів
+    setupFiltersHandlers();
+
+    // Завантажуємо список судів для фільтрів з невеликою затримкою
+    setTimeout(() => {
+        loadCourtsForFilters();
+    }, 100);
+}
+
+function createPagination(paginationData) {
+    const paginationContainer = document.createElement('div');
+    paginationContainer.className = 'pagination-container';
+    paginationContainer.style.cssText = 'text-align: center; margin-top: 15px;';
+
+    const pagination = document.createElement('nav');
+    const ul = document.createElement('ul');
+    ul.className = 'pagination pagination-sm justify-content-center';
+
+    // Попередня сторінка
+    if (paginationData.has_prev) {
+        const prevLi = document.createElement('li');
+        prevLi.className = 'page-item';
+        prevLi.innerHTML = "<a class='page-link' href='#' onclick='loadCourtDecisionsList(" + (paginationData.page - 1) + "); return false;'>« Попередня</a>";
+        ul.appendChild(prevLi);
+    }
+
+    // Номери сторінок (показуємо 5 сторінок навколо поточної)
+    const currentPage = paginationData.page;
+    const totalPages = paginationData.total_pages;
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+
+    for (let page = startPage; page <= endPage; page++) {
+        const li = document.createElement('li');
+        li.className = page === currentPage ? 'page-item active' : 'page-item';
+        li.innerHTML = "<a class='page-link' href='#' onclick='loadCourtDecisionsList(" + page + "); return false;'>" + page + "</a>";
+        ul.appendChild(li);
+    }
+
+    // Наступна сторінка
+    if (paginationData.has_next) {
+        const nextLi = document.createElement('li');
+        nextLi.className = 'page-item';
+        nextLi.innerHTML = "<a class='page-link' href='#' onclick='loadCourtDecisionsList(" + (paginationData.page + 1) + "); return false;'>Наступна »</a>";
+        ul.appendChild(nextLi);
+    }
+
+    pagination.appendChild(ul);
+    paginationContainer.appendChild(pagination);
+
+    return paginationContainer;
+}
+
+// Глобальна змінна для зберігання поточних фільтрів
+let currentFilters = {};
+
+function setupFiltersHandlers() {
+    // Обробник для розгортання/згортання фільтрів
+    const toggleButton = document.getElementById('toggle-filters');
+    const filtersContent = document.getElementById('filters-content');
+    const toggleText = document.getElementById('filter-toggle-text');
+
+    if (toggleButton && filtersContent && toggleText) {
+        toggleButton.addEventListener('click', function() {
+            if (filtersContent.style.display === 'none') {
+                filtersContent.style.display = 'block';
+                toggleText.textContent = 'Згорнути';
+            } else {
+                filtersContent.style.display = 'none';
+                toggleText.textContent = 'Розгорнути';
+            }
+        });
+    }
+
+    // Обробник для застосування фільтрів
+    const applyButton = document.getElementById('apply-filters');
+    if (applyButton) {
+        applyButton.addEventListener('click', applyFilters);
+    }
+
+    // Обробник для очищення фільтрів
+    const clearButton = document.getElementById('clear-filters');
+    if (clearButton) {
+        clearButton.addEventListener('click', clearFilters);
+    }
+
+    // Обробники для Enter в полях пошуку
+    const textInputs = ['filter-case-number', 'filter-judge', 'filter-court-main'];
+    textInputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    applyFilters();
+                }
+            });
+        }
+    });
+
+    // Логіка взаємовиключення: точна дата VS період
+    const exactDateInput = document.getElementById('filter-exact-date');
+    const dateFromInput = document.getElementById('filter-date-from');
+    const dateToInput = document.getElementById('filter-date-to');
+
+    if (exactDateInput && dateFromInput && dateToInput) {
+        exactDateInput.addEventListener('change', function() {
+            if (this.value) {
+                dateFromInput.value = '';
+                dateToInput.value = '';
+            }
+        });
+
+        [dateFromInput, dateToInput].forEach(input => {
+            input.addEventListener('change', function() {
+                if (dateFromInput.value || dateToInput.value) {
+                    exactDateInput.value = '';
+                }
+            });
+        });
+    }
+}
+
+function applyFilters() {
+    // Збираємо значення фільтрів
+    currentFilters = {};
+
+    const exactDate = document.getElementById('filter-exact-date')?.value;
+    const dateFrom = document.getElementById('filter-date-from')?.value;
+    const dateTo = document.getElementById('filter-date-to')?.value;
+    const caseNumber = document.getElementById('filter-case-number')?.value.trim();
+    const judge = document.getElementById('filter-judge')?.value.trim();
+    const court = document.getElementById('filter-court-main')?.value.trim();
+
+    if (exactDate) currentFilters.exact_date = exactDate;
+    if (dateFrom) currentFilters.date_from = dateFrom;
+    if (dateTo) currentFilters.date_to = dateTo;
+    if (caseNumber) currentFilters.case_number = caseNumber;
+    if (judge) currentFilters.judge = judge;
+    if (court) currentFilters.court = court;
+
+    // Перезавантажуємо дані з фільтрами
+    loadCourtDecisionsList(1); // Завжди повертаємося на першу сторінку при зміні фільтрів
+}
+
+function clearFilters() {
+    // Очищуємо всі поля
+    const filterIds = ['filter-exact-date', 'filter-date-from', 'filter-date-to',
+                      'filter-case-number', 'filter-judge', 'filter-court-main'];
+
+    filterIds.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.value = '';
+    });
+
+    // Очищуємо глобальні фільтри
+    currentFilters = {};
+
+    // Перезавантажуємо дані без фільтрів
+    loadCourtDecisionsList(1);
+}
+
+function updateBreadcrumb() {
+    const breadcrumb = document.getElementById("hierarchical-breadcrumb");
+    let breadcrumbHTML = "<span class='breadcrumb-item active' onclick='loadYearlyStats()'>Роки</span>";
+    
+    if (hierarchyData.year) {
+        const yearClass = currentHierarchyLevel === "justice_kinds" ? "active" : "";
+        breadcrumbHTML += "<span class='breadcrumb-separator'>→</span>";
+        
+        // Відображаємо повний рік, але використовуємо короткий для параметрів
+        const displayYear = hierarchyData.year_display || (hierarchyData.year.toString().length <= 2 ? 
+            (parseInt(hierarchyData.year) < 50 ? 2000 + parseInt(hierarchyData.year) : 1900 + parseInt(hierarchyData.year)) : 
+            hierarchyData.year);
+        
+        breadcrumbHTML += "<span class='breadcrumb-item " + yearClass + "' onclick='loadJusticeKindsForYear(\"" + hierarchyData.year + "\")'>" + displayYear + "</span>";
+    }
+    
+    if (hierarchyData.justice_kind) {
+        const justiceClass = currentHierarchyLevel === "instances" ? "active" : "";
+        breadcrumbHTML += "<span class='breadcrumb-separator'>→</span>";
+        breadcrumbHTML += "<span class='breadcrumb-item " + justiceClass + "' onclick='loadInstancesForJusticeKind(\"" + hierarchyData.justice_kind + "\", \"" + hierarchyData.justice_kind_name + "\")'>" + (hierarchyData.justice_kind_name || hierarchyData.justice_kind) + "</span>";
+    }
+    
+    if (hierarchyData.instance_code) {
+        const instanceClass = currentHierarchyLevel === "judgment_forms" ? "active" : "";
+        breadcrumbHTML += "<span class='breadcrumb-separator'>→</span>";
+        breadcrumbHTML += "<span class='breadcrumb-item " + instanceClass + "' onclick='loadJudgmentFormsForInstance(\"" + hierarchyData.instance_code + "\", \"" + hierarchyData.instance_name + "\")'>" + (hierarchyData.instance_name || hierarchyData.instance_code) + "</span>";
+    }
+    
+    if (hierarchyData.judgment_form) {
+        breadcrumbHTML += "<span class='breadcrumb-separator'>→</span>";
+        breadcrumbHTML += "<span class='breadcrumb-item active'>" + (hierarchyData.judgment_form_name || hierarchyData.judgment_form) + "</span>";
+    }
+    
+    breadcrumb.innerHTML = breadcrumbHTML;
+}
+
+async function refreshCurrentHierarchyLevel(forceRefresh = false) {
+    switch (currentHierarchyLevel) {
+        case "years":
+            await loadYearlyStats(forceRefresh);
+            break;
+        case "justice_kinds":
+            await loadJusticeKindsForYear(hierarchyData.year, forceRefresh);
+            break;
+        case "instances":
+            await loadInstancesForJusticeKind(hierarchyData.justice_kind, hierarchyData.justice_kind_name, forceRefresh);
+            break;
+        case "judgment_forms":
+            await loadJudgmentFormsForInstance(hierarchyData.instance_code, hierarchyData.instance_name, forceRefresh);
+            break;
+        case "details":
+            await loadDetailedStats(hierarchyData.judgment_form, hierarchyData.judgment_form_name, forceRefresh);
+            break;
+    }
+}
+
+async function refreshHierarchicalStats() {
+    const button = event.target;
+    const originalText = button.textContent;
+    button.innerHTML = "⏳";
+    button.disabled = true;
+    
+    try {
+        await refreshCurrentHierarchyLevel(true); // force_refresh = true
+    } catch (error) {
+        console.error("Помилка оновлення ієрархічної статистики:", error);
+    }
+    
+    button.textContent = originalText;
+    button.disabled = false;
+}
+
+// Автоматичне оновлення кешу кожні 30 хвилин для ієрархічної статистики
+setInterval(async () => {
+    try {
+        await refreshCurrentHierarchyLevel(false); // Тихе оновлення без force
+        console.log("Автоматичне оновлення ієрархічної статистики завершено");
+    } catch (error) {
+        console.error("Помилка автоматичного оновлення:", error);
+    }
+}, 1800000); // 30 хвилин
+
+
+// Форматування чисел з розділенням розрядів пробілами
+function formatNumber(num) {
+    if (!num) return "0";
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+function formatDate(dateString) {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "-";
+    return date.toLocaleDateString('uk-UA', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+}
+
+// Отримання CSRF токену
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+        const cookies = document.cookie.split(";");
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + "=")) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Показати/приховати індикатор оновлення
+function showRefreshIndicator() {
+    document.querySelector(".auto-refresh-indicator").style.opacity = "1";
+}
+
+function hideRefreshIndicator() {
+    setTimeout(() => {
+        document.querySelector(".auto-refresh-indicator").style.opacity = "0.5";
+    }, 1000);
+}
+
+// Завантаження списку судів для фільтрів
+async function loadCourtsForFilters() {
+    try {
+        console.log("loadCourtsForFilters викликана");
+        console.log("hierarchyData:", hierarchyData);
+
+        // Використовуємо поточні параметри ієрархії
+        if (!hierarchyData.year || !hierarchyData.justice_kind || !hierarchyData.instance_code || !hierarchyData.judgment_form) {
+            console.log("Не всі параметри встановлені, пропускаємо завантаження судів");
+            return; // Не завантажуємо, якщо не всі параметри встановлені
+        }
+
+        const url = new URL("{% url 'bankruptcy:courts_list_api' %}", window.location.origin);
+        url.searchParams.set('year', hierarchyData.year);
+        url.searchParams.set('justice_kind', hierarchyData.justice_kind);
+        url.searchParams.set('instance_code', hierarchyData.instance_code);
+        url.searchParams.set('judgment_code', hierarchyData.judgment_form);
+
+        console.log("Завантажуємо суди з URL:", url.toString());
+        const response = await fetch(url);
+        const data = await response.json();
+        console.log("Отримано дані про суди:", data);
+
+        const courtSelect = document.getElementById('filter-court-main');
+        console.log("Елемент filter-court знайдено:", courtSelect);
+
+        if (courtSelect && data && data.courts && data.courts.length > 0) {
+            // Очищуємо поточні опції (залишаємо тільки "Всі суди")
+            courtSelect.innerHTML = '<option value="">Всі суди</option>';
+
+            // Створюємо унікальний список судів (по court_code)
+            const uniqueCourts = [];
+            const seenCodes = new Set();
+
+            data.courts.forEach(court => {
+                if (!seenCodes.has(court.court_code)) {
+                    seenCodes.add(court.court_code);
+                    uniqueCourts.push(court);
+                }
+            });
+
+            console.log("Унікальні суди:", uniqueCourts);
+
+            // Додаємо унікальні суди
+            uniqueCourts.forEach(court => {
+                const option = document.createElement('option');
+                option.value = court.court_code;
+                option.textContent = court.court_name;
+                courtSelect.appendChild(option);
+            });
+
+            console.log("Суди додано до select");
+        } else {
+            console.log("Не вдалося завантажити суди:", {
+                courtSelect: !!courtSelect,
+                dataExists: !!data,
+                courtsExists: !!(data && data.courts),
+                courtsLength: data && data.courts ? data.courts.length : 0
+            });
+        }
+    } catch (error) {
+        console.error('Помилка завантаження списку судів:', error);
+        // Залишаємо тільки "Всі суди" при помилці
+        const courtSelect = document.getElementById('filter-court-main');
+        if (courtSelect) {
+            courtSelect.innerHTML = '<option value="">Всі суди</option>';
+        }
+    }
+}
+
+// Очищення інтервалу при залишенні сторінки
+window.addEventListener("beforeunload", function() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+    }
+});
+</script>
+{% endblock %}

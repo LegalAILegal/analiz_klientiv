@@ -1,0 +1,928 @@
+{% extends "bankruptcy/base.html" %}
+{% load humanize %}
+{% load ukrainian_formatting %}
+
+{% block title %}Кредитори - Аналіз банкрутства{% endblock %}
+
+{% block extra_css %}
+<style>
+.stats-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.stat-card h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.stat-card .stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    margin: 0;
+}
+
+.queue-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.queue-card {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+}
+
+.control-panel {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.btn-extract {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    border: none;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-extract:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(40,167,69,0.3);
+}
+
+.creditor-row {
+    transition: background-color 0.2s ease;
+}
+
+.creditor-row:hover {
+    background-color: #f1f3f4;
+}
+
+.creditor-details {
+    border-left: 3px solid #007bff;
+    background-color: #f8f9fa !important;
+}
+
+.creditor-details:hover {
+    background-color: #e9ecef !important;
+}
+
+.expand-icon {
+    transition: transform 0.2s ease;
+    cursor: pointer;
+}
+
+.expand-icon:hover {
+    transform: scale(1.1);
+}
+
+.table-sm td {
+    padding: 0.25rem;
+    vertical-align: middle;
+    font-size: 12px;
+}
+
+.table-sm th {
+    padding: 0.3rem;
+    font-size: 13px;
+}
+
+.badge {
+    font-size: 10px;
+    padding: 0.2em 0.4em;
+}
+
+/* Жорстко фіксуємо ширину стовбців таблиці */
+.table th:nth-child(1) { width: 40px !important; min-width: 40px !important; max-width: 40px !important; }
+.table th:nth-child(2) { width: auto !important; min-width: 300px !important; }
+.table th:nth-child(3) { width: 60px !important; min-width: 60px !important; max-width: 60px !important; }
+.table th:nth-child(4) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+.table th:nth-child(5) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+.table th:nth-child(6) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+.table th:nth-child(7) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+.table th:nth-child(8) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+.table th:nth-child(9) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+.table th:nth-child(10) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+
+.table td:nth-child(1) { width: 40px !important; min-width: 40px !important; max-width: 40px !important; }
+.table td:nth-child(2) { width: auto !important; min-width: 300px !important; word-wrap: break-word; }
+.table td:nth-child(3) { width: 60px !important; min-width: 60px !important; max-width: 60px !important; }
+.table td:nth-child(4) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+.table td:nth-child(5) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+.table td:nth-child(6) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+.table td:nth-child(7) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+.table td:nth-child(8) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+.table td:nth-child(9) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+.table td:nth-child(10) { width: 115px !important; min-width: 115px !important; max-width: 115px !important; }
+
+/* Дозволяємо автоматичне розміщення стовбців для назв кредиторів */
+.table {
+    table-layout: auto !important;
+    width: 100% !important;
+}
+
+.loading {
+    display: none;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.top-creditors {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.top-creditor {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.top-creditor:last-child {
+    border-bottom: none;
+}
+
+.creditor-rank {
+    background: #007bff;
+    color: white;
+    border-radius: 50%;
+    width: 25px;
+    height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.search-container {
+    margin-bottom: 20px;
+}
+
+.search-input {
+    width: 100%;
+    max-width: 400px;
+    padding: 8px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+@media (max-width: 768px) {
+    .stats-container {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .queue-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .creditor-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="row">
+        <div class="col-12">
+            <h2><i class="fas fa-users"></i> Реєстр вимог кредиторів</h2>
+
+            <!-- Компактна статистика -->
+            <div class="stats-container">
+                <div class="stat-card">
+                    <h4>Кредитори</h4>
+                    <div class="stat-value">{{ stats.total_creditors|floatformat:0 }}</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Вимоги</h4>
+                    <div class="stat-value">{{ stats.total_claims|floatformat:0 }}</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Загальна сума</h4>
+                    <div class="stat-value">{{ stats.total_amount|floatformat:0|intcomma }} грн</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Справи</h4>
+                    <div class="stat-value">{{ stats.processed_cases|floatformat:0 }}</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Успішність</h4>
+                    <div class="stat-value">{{ stats.success_percentage|floatformat:1 }}%</div>
+                </div>
+            </div>
+
+            <!-- Панель управління основним процесом -->
+            <div class="control-panel">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5><i class="fas fa-search"></i> Процес 1: Витягування кредиторів</h5>
+                        <small class="text-muted">Інкрементальне витягування кредиторів з найновіших записів</small>
+                    </div>
+                    <div>
+                        <button id="startExtraction" class="btn-extract" onclick="startExtractionFunction()">
+                            <i class="fas fa-play"></i> Запустити витягування
+                        </button>
+                        <button id="stopExtraction" class="btn-extract" style="background: linear-gradient(45deg, #dc3545, #c82333); margin-left: 10px; display: none;" onclick="stopExtractionFunction()">
+                            <i class="fas fa-stop"></i> Зупинити витягування
+                        </button>
+                    </div>
+                </div>
+                <div id="extractionStatus" class="loading mt-2"></div>
+                {% csrf_token %}
+            </div>
+
+            <!-- Панель управління процесом дедуплікації -->
+            <div class="control-panel" style="background: #e8f4fd; border-color: #b8daff;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5><i class="fas fa-compress-arrows-alt"></i> Процес 2: Дедуплікація кредиторів</h5>
+                        <small class="text-muted">Обробка дублікатів та пропущених кредиторів з різних типів документів</small>
+                    </div>
+                    <div>
+                        <button id="startDeduplication" class="btn-extract" style="background: linear-gradient(45deg, #17a2b8, #138496);" onclick="startDeduplicationFunction()">
+                            <i class="fas fa-play"></i> Запустити дедуплікацію
+                        </button>
+                        <button id="stopDeduplication" class="btn-extract" style="background: linear-gradient(45deg, #dc3545, #c82333); margin-left: 10px; display: none;" onclick="stopDeduplicationFunction()">
+                            <i class="fas fa-stop"></i> Зупинити дедуплікацію
+                        </button>
+                        <a href="{% url 'bankruptcy:deduplication_detail' %}" class="btn-extract" style="background: linear-gradient(45deg, #6c757d, #5a6268); margin-left: 10px;">
+                            <i class="fas fa-list-ul"></i> Деталі
+                        </a>
+                    </div>
+                </div>
+                <div id="deduplicationStatus" class="loading mt-2"></div>
+            </div>
+
+            <!-- Статистика дедуплікації -->
+            <div class="stats-container" id="deduplicationStats" style="margin-top: 15px; display: none;">
+                <div class="stat-card" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
+                    <h4>Справи дедупліковано</h4>
+                    <div class="stat-value" id="dedup-cases">0</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                    <h4>Кредиторів додано</h4>
+                    <div class="stat-value" id="dedup-creditors">0</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);">
+                    <h4>Дублікатів видалено</h4>
+                    <div class="stat-value" id="dedup-duplicates">0</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%);">
+                    <h4>Вимог оновлено</h4>
+                    <div class="stat-value" id="dedup-claims">0</div>
+                </div>
+            </div>
+
+            <!-- Статистика за чергами -->
+            <div class="queue-stats">
+                {% for i in "123456" %}
+                    {% with queue_key="queue_"|add:i %}
+                        {% with queue_amount=stats.queue_stats|default_if_none:0 %}
+                            <div class="queue-card">
+                                <div style="font-weight: bold; color: #495057;">{{ i }}-а черга</div>
+                                <div style="font-size: 18px; color: #007bff; font-weight: bold;">
+                                    {% if queue_key == "queue_1" %}{{ stats.queue_stats.queue_1|default_if_none:0|floatformat:2|intcomma }}{% endif %}
+                                    {% if queue_key == "queue_2" %}{{ stats.queue_stats.queue_2|default_if_none:0|floatformat:2|intcomma }}{% endif %}
+                                    {% if queue_key == "queue_3" %}{{ stats.queue_stats.queue_3|default_if_none:0|floatformat:2|intcomma }}{% endif %}
+                                    {% if queue_key == "queue_4" %}{{ stats.queue_stats.queue_4|default_if_none:0|floatformat:2|intcomma }}{% endif %}
+                                    {% if queue_key == "queue_5" %}{{ stats.queue_stats.queue_5|default_if_none:0|floatformat:2|intcomma }}{% endif %}
+                                    {% if queue_key == "queue_6" %}{{ stats.queue_stats.queue_6|default_if_none:0|floatformat:2|intcomma }}{% endif %}
+                                    грн
+                                </div>
+                            </div>
+                        {% endwith %}
+                    {% endwith %}
+                {% endfor %}
+            </div>
+
+
+            <!-- Пошук -->
+            <div class="search-container">
+                <form method="get" class="d-flex">
+                    <input type="text" name="search" value="{{ search_query }}"
+                           placeholder="Пошук кредиторів..." class="search-input mr-2">
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    {% if search_query %}
+                        <a href="{% url 'bankruptcy:creditors_list' %}" class="btn btn-outline-secondary ml-2">
+                            <i class="fas fa-times"></i> Скинути
+                        </a>
+                    {% endif %}
+                </form>
+            </div>
+
+            <!-- Таблиця кредиторів з розгортуванням рядків -->
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered table-sm">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th style="width: 40px;">#</th>
+                            <th style="min-width: 300px;">Назва кредитора</th>
+                            <th style="width: 60px;">Справи</th>
+                            <th style="width: 115px;">1-а черга</th>
+                            <th style="width: 115px;">2-а черга</th>
+                            <th style="width: 115px;">3-я черга</th>
+                            <th style="width: 115px;">4-а черга</th>
+                            <th style="width: 115px;">5-а черга</th>
+                            <th style="width: 115px;">6-а черга</th>
+                            <th style="width: 115px;">Загальна сума</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for creditor in creditors %}
+                            <!-- Головний рядок кредитора -->
+                            <tr class="creditor-row" data-creditor-id="{{ creditor.id }}" style="cursor: pointer;">
+                                <td>
+                                    <span style="color: black;">{{ forloop.counter }}</span>
+                                    <i class="fas fa-plus-square text-primary expand-icon ml-1" id="icon-{{ creditor.id }}"></i>
+                                </td>
+                                <td>
+                                    <strong style="color: black;">{{ creditor.name }}</strong>
+                                </td>
+                                <td class="text-center">
+                                    <span style="color: black;">{{ creditor.claims_count }}</span>
+                                </td>
+                                <td class="text-right">
+                                    {% if creditor.total_1st_queue > 0 %}
+                                        <span style="color: black;"><strong>{{ creditor.total_1st_queue|ukrainian_currency }}</strong></span>
+                                    {% else %}
+                                        <span style="color: black;">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    {% if creditor.total_2nd_queue > 0 %}
+                                        <span style="color: black;"><strong>{{ creditor.total_2nd_queue|ukrainian_currency }}</strong></span>
+                                    {% else %}
+                                        <span style="color: black;">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    {% if creditor.total_3rd_queue > 0 %}
+                                        <span style="color: black;"><strong>{{ creditor.total_3rd_queue|ukrainian_currency }}</strong></span>
+                                    {% else %}
+                                        <span style="color: black;">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    {% if creditor.total_4th_queue > 0 %}
+                                        <span style="color: black;"><strong>{{ creditor.total_4th_queue|ukrainian_currency }}</strong></span>
+                                    {% else %}
+                                        <span style="color: black;">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    {% if creditor.total_5th_queue > 0 %}
+                                        <span style="color: black;"><strong>{{ creditor.total_5th_queue|ukrainian_currency }}</strong></span>
+                                    {% else %}
+                                        <span style="color: black;">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    {% if creditor.total_6th_queue > 0 %}
+                                        <span style="color: black;"><strong>{{ creditor.total_6th_queue|ukrainian_currency }}</strong></span>
+                                    {% else %}
+                                        <span style="color: black;">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    <strong style="color: black;">{{ creditor.total_sum|ukrainian_currency }}</strong>
+                                </td>
+                            </tr>
+
+                            <!-- Розгорнуті рядки з деталями справ -->
+                            {% for claim in creditor.creditor_claims.all %}
+                                <tr class="creditor-details" id="details-{{ creditor.id }}-{{ claim.id }}" style="display: none; background-color: #f8f9fa;">
+                                    <td class="text-center">
+                                        <i class="fas fa-file-alt text-muted" style="font-size: 12px;"></i>
+                                    </td>
+                                    <td style="padding-left: 30px;">
+                                        <div>
+                                            <a href="{% url 'bankruptcy:case_detail' claim.case.id %}" target="_blank" style="color: #007bff; text-decoration: none;">
+                                                <i class="fas fa-external-link-alt"></i> <strong>{{ claim.case.case_number }}</strong>
+                                            </a>
+                                        </div>
+                                        <div style="color: #6c757d; font-size: 12px; margin-top: 2px;">
+                                            <i class="fas fa-building"></i> {{ claim.case.company.name }}
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge badge-info">1</span>
+                                    </td>
+                                    <td class="text-right">
+                                        {% if claim.amount_1st_queue > 0 %}
+                                            <span style="color: #28a745; font-weight: bold;">{{ claim.amount_1st_queue|ukrainian_currency }}</span>
+                                        {% else %}
+                                            <span style="color: #6c757d;">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-right">
+                                        {% if claim.amount_2nd_queue > 0 %}
+                                            <span style="color: #28a745; font-weight: bold;">{{ claim.amount_2nd_queue|ukrainian_currency }}</span>
+                                        {% else %}
+                                            <span style="color: #6c757d;">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-right">
+                                        {% if claim.amount_3rd_queue > 0 %}
+                                            <span style="color: #28a745; font-weight: bold;">{{ claim.amount_3rd_queue|ukrainian_currency }}</span>
+                                        {% else %}
+                                            <span style="color: #6c757d;">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-right">
+                                        {% if claim.amount_4th_queue > 0 %}
+                                            <span style="color: #28a745; font-weight: bold;">{{ claim.amount_4th_queue|ukrainian_currency }}</span>
+                                        {% else %}
+                                            <span style="color: #6c757d;">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-right">
+                                        {% if claim.amount_5th_queue > 0 %}
+                                            <span style="color: #28a745; font-weight: bold;">{{ claim.amount_5th_queue|ukrainian_currency }}</span>
+                                        {% else %}
+                                            <span style="color: #6c757d;">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-right">
+                                        {% if claim.amount_6th_queue > 0 %}
+                                            <span style="color: #28a745; font-weight: bold;">{{ claim.amount_6th_queue|ukrainian_currency }}</span>
+                                        {% else %}
+                                            <span style="color: #6c757d;">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-right">
+                                        <strong style="color: #007bff;">{{ claim.total_amount|ukrainian_currency }}</strong>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% empty %}
+                            <tr>
+                                <td colspan="10" class="text-center" style="color: black;">
+                                    {% if search_query %}
+                                        За запитом "{{ search_query }}" кредиторів не знайдено.
+                                    {% else %}
+                                        Немає даних про кредиторів. Запустіть витягування кредиторів.
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+console.log("JavaScript file loaded"); // Тест завантаження
+
+// Глобальна функція для кнопки (fallback)
+function startExtractionFunction() {
+    console.log("startExtractionFunction викликана");
+
+    const startBtn = document.getElementById("startExtraction");
+    const stopBtn = document.getElementById("stopExtraction");
+    const status = document.getElementById("extractionStatus");
+
+    // Отримуємо CSRF токен з cookie або DOM
+    let csrfTokenValue = getCookie('csrftoken');
+    if (!csrfTokenValue) {
+        const csrfTokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrfTokenElement) {
+            csrfTokenValue = csrfTokenElement.value;
+        }
+    }
+
+    if (!csrfTokenValue) {
+        console.error("CSRF токен не знайдено!");
+        status.innerHTML = "Помилка: CSRF токен не знайдено";
+        return;
+    }
+
+    startBtn.disabled = true;
+    startBtn.innerHTML = "<i class='fas fa-spinner fa-spin'></i> Запускається...";
+    status.style.display = "block";
+    status.innerHTML = "Запуск витягування кредиторів...";
+
+    fetch("{% url 'bankruptcy:start_creditor_extraction' %}", {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": csrfTokenValue,
+            "Content-Type": "application/json"
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            status.innerHTML = "<i class='fas fa-check text-success'></i> " + data.message;
+            extractionRunning = true;
+            startBtn.style.display = "none";
+            stopBtn.style.display = "inline-block";
+        } else {
+            status.innerHTML = "<i class='fas fa-exclamation-triangle text-danger'></i> Помилка: " + data.error;
+            startBtn.disabled = false;
+            startBtn.innerHTML = "<i class='fas fa-play'></i> Запустити витягування";
+        }
+    })
+    .catch(error => {
+        status.innerHTML = "<i class='fas fa-exclamation-triangle text-danger'></i> Помилка запиту: " + error;
+        startBtn.disabled = false;
+        startBtn.innerHTML = "<i class='fas fa-play'></i> Запустити витягування";
+    });
+}
+
+// Глобальна функція для запуску дедуплікації
+function startDeduplicationFunction() {
+    console.log("startDeduplicationFunction викликана");
+
+    const startBtn = document.getElementById("startDeduplication");
+    const stopBtn = document.getElementById("stopDeduplication");
+    const status = document.getElementById("deduplicationStatus");
+    const statsContainer = document.getElementById("deduplicationStats");
+
+    // Отримуємо CSRF токен
+    let csrfTokenValue = getCookie('csrftoken');
+    if (!csrfTokenValue) {
+        const csrfTokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrfTokenElement) {
+            csrfTokenValue = csrfTokenElement.value;
+        }
+    }
+
+    if (!csrfTokenValue) {
+        console.error("CSRF токен не знайдено!");
+        status.innerHTML = "Помилка: CSRF токен не знайдено";
+        return;
+    }
+
+    startBtn.disabled = true;
+    startBtn.innerHTML = "<i class='fas fa-spinner fa-spin'></i> Запускається...";
+    status.style.display = "block";
+    status.innerHTML = "Запуск дедуплікації кредиторів...";
+    statsContainer.style.display = "grid";
+
+    fetch("{% url 'bankruptcy:start_deduplication_process' %}", {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": csrfTokenValue,
+            "Content-Type": "application/json"
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            status.innerHTML = "<i class='fas fa-check text-success'></i> " + data.message;
+            deduplicationRunning = true;
+            startBtn.style.display = "none";
+            stopBtn.style.display = "inline-block";
+        } else {
+            status.innerHTML = "<i class='fas fa-exclamation-triangle text-danger'></i> Помилка: " + data.error;
+            startBtn.disabled = false;
+            startBtn.innerHTML = "<i class='fas fa-play'></i> Запустити дедуплікацію";
+        }
+    })
+    .catch(error => {
+        status.innerHTML = "<i class='fas fa-exclamation-triangle text-danger'></i> Помилка запиту: " + error;
+        startBtn.disabled = false;
+        startBtn.innerHTML = "<i class='fas fa-play'></i> Запустити дедуплікацію";
+    });
+}
+
+// Глобальна функція для зупинки дедуплікації
+function stopDeduplicationFunction() {
+    console.log("stopDeduplicationFunction викликана");
+
+    const startBtn = document.getElementById("startDeduplication");
+    const stopBtn = document.getElementById("stopDeduplication");
+    const status = document.getElementById("deduplicationStatus");
+
+    // Отримуємо CSRF токен
+    let csrfTokenValue = getCookie('csrftoken');
+    if (!csrfTokenValue) {
+        const csrfTokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrfTokenElement) {
+            csrfTokenValue = csrfTokenElement.value;
+        }
+    }
+
+    stopBtn.disabled = true;
+    stopBtn.innerHTML = "<i class='fas fa-spinner fa-spin'></i> Зупиняється...";
+    status.innerHTML = "Зупинка дедуплікації кредиторів...";
+
+    fetch("{% url 'bankruptcy:stop_deduplication_process' %}", {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": csrfTokenValue,
+            "Content-Type": "application/json"
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            status.innerHTML = "<i class='fas fa-stop text-warning'></i> " + data.message;
+            deduplicationRunning = false;
+            stopBtn.style.display = "none";
+            startBtn.style.display = "inline-block";
+            startBtn.disabled = false;
+            startBtn.innerHTML = "<i class='fas fa-play'></i> Запустити дедуплікацію";
+        } else {
+            status.innerHTML = "<i class='fas fa-exclamation-triangle text-danger'></i> Помилка зупинки: " + data.error;
+        }
+    })
+    .catch(error => {
+        status.innerHTML = "<i class='fas fa-exclamation-triangle text-danger'></i> Помилка запиту зупинки: " + error;
+    })
+    .finally(() => {
+        stopBtn.disabled = false;
+        stopBtn.innerHTML = "<i class='fas fa-stop'></i> Зупинити дедуплікацію";
+    });
+}
+
+// Глобальна функція для кнопки зупинки
+function stopExtractionFunction() {
+    console.log("stopExtractionFunction викликана");
+
+    const startBtn = document.getElementById("startExtraction");
+    const stopBtn = document.getElementById("stopExtraction");
+    const status = document.getElementById("extractionStatus");
+
+    // Отримуємо CSRF токен
+    let csrfTokenValue = getCookie('csrftoken');
+    if (!csrfTokenValue) {
+        const csrfTokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrfTokenElement) {
+            csrfTokenValue = csrfTokenElement.value;
+        }
+    }
+
+    stopBtn.disabled = true;
+    stopBtn.innerHTML = "<i class='fas fa-spinner fa-spin'></i> Зупиняється...";
+    status.innerHTML = "Зупинка витягування кредиторів...";
+
+    fetch("{% url 'bankruptcy:stop_creditor_extraction' %}", {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": csrfTokenValue,
+            "Content-Type": "application/json"
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            status.innerHTML = "<i class='fas fa-stop text-warning'></i> " + data.message;
+            extractionRunning = false;
+            stopBtn.style.display = "none";
+            startBtn.style.display = "inline-block";
+            startBtn.disabled = false;
+            startBtn.innerHTML = "<i class='fas fa-play'></i> Запустити витягування";
+        } else {
+            status.innerHTML = "<i class='fas fa-exclamation-triangle text-danger'></i> Помилка зупинки: " + data.error;
+        }
+    })
+    .catch(error => {
+        status.innerHTML = "<i class='fas fa-exclamation-triangle text-danger'></i> Помилка запиту зупинки: " + error;
+    })
+    .finally(() => {
+        stopBtn.disabled = false;
+        stopBtn.innerHTML = "<i class='fas fa-stop'></i> Зупинити витягування";
+    });
+}
+
+// Функція для отримання CSRF токену з cookie
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Управління витягуванням кредиторів
+let extractionRunning = false;
+let deduplicationRunning = false;
+
+// Розгортання/згортання деталей кредиторів
+document.addEventListener("DOMContentLoaded", function() {
+    console.log("Ініціалізація розгортання кредиторів");
+
+    const creditorRows = document.querySelectorAll(".creditor-row");
+    console.log("Знайдено рядків кредиторів:", creditorRows.length);
+
+    creditorRows.forEach(row => {
+        row.addEventListener("click", function() {
+            const creditorId = this.getAttribute("data-creditor-id");
+            console.log("Клік по кредитору ID:", creditorId);
+
+            // Шукаємо всі рядки деталей для цього кредитора
+            const detailSelector = "[id^='details-" + creditorId + "-']";
+            const detailRows = document.querySelectorAll(detailSelector);
+            console.log("Знайдено details рядків:", detailRows.length, "по селектору:", detailSelector);
+
+            const expandIcon = document.getElementById("icon-" + creditorId);
+
+            if (detailRows.length === 0) {
+                console.log("Немає рядків деталей для розгортання");
+                return;
+            }
+
+            // Перевіряємо поточний стан
+            let isExpanded = false;
+            detailRows.forEach(row => {
+                if (row.style.display === "table-row") {
+                    isExpanded = true;
+                }
+            });
+
+            console.log("Поточний стан:", isExpanded ? "розгорнуто" : "згорнуто");
+
+            if (isExpanded) {
+                // Згортаємо
+                detailRows.forEach(row => {
+                    row.style.display = "none";
+                });
+                if (expandIcon) {
+                    expandIcon.classList.remove("fa-minus-square");
+                    expandIcon.classList.add("fa-plus-square");
+                }
+                console.log("ЗГОРНУТО");
+            } else {
+                // Розгортаємо
+                detailRows.forEach(row => {
+                    row.style.display = "table-row";
+                });
+                if (expandIcon) {
+                    expandIcon.classList.remove("fa-plus-square");
+                    expandIcon.classList.add("fa-minus-square");
+                }
+                console.log("РОЗГОРНУТО");
+            }
+        });
+    });
+});
+
+// Автооновлення статистики кожні 5 секунд через AJAX
+let statsUpdateInterval;
+
+function updateStats() {
+    // Оновлюємо загальну статистику
+    fetch(window.location.pathname + '?ajax=stats', {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Оновлюємо статистичні дані без перезавантаження сторінки
+            updateStatsDisplay(data.stats);
+        } else {
+            console.error('Помилка оновлення статистики:', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Помилка запиту статистики:', error);
+    });
+
+    // Оновлюємо статистику дедуплікації
+    fetch("{% url 'bankruptcy:deduplication_stats_api' %}", {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            updateDeduplicationStats(data.stats);
+        }
+    })
+    .catch(error => {
+        console.error('Помилка запиту статистики дедуплікації:', error);
+    });
+}
+
+function updateStatsDisplay(stats) {
+    // Оновлення загальної статистики
+    const totalCreditors = document.querySelector('.stat-card:nth-child(1) .stat-value');
+    const totalClaims = document.querySelector('.stat-card:nth-child(2) .stat-value');
+    const totalAmount = document.querySelector('.stat-card:nth-child(3) .stat-value');
+    const processedCases = document.querySelector('.stat-card:nth-child(4) .stat-value');
+    const successPercentage = document.querySelector('.stat-card:nth-child(5) .stat-value');
+
+    if (totalCreditors) totalCreditors.textContent = stats.total_creditors.toLocaleString();
+    if (totalClaims) totalClaims.textContent = stats.total_claims.toLocaleString();
+    if (totalAmount) totalAmount.textContent = stats.total_amount.toLocaleString() + ' грн';
+    if (processedCases) processedCases.textContent = stats.processed_cases.toLocaleString();
+    if (successPercentage) successPercentage.textContent = stats.success_percentage.toFixed(1) + '%';
+
+    // Додаємо візуальний індикатор оновлення
+    const indicators = document.querySelectorAll('.stat-value');
+    indicators.forEach(indicator => {
+        indicator.style.backgroundColor = '#e8f5e8';
+        setTimeout(() => {
+            indicator.style.backgroundColor = 'transparent';
+        }, 300);
+    });
+
+    console.log('Статистика оновлена:', new Date().toLocaleTimeString());
+}
+
+function updateDeduplicationStats(stats) {
+    // Оновлення статистики дедуплікації
+    const dedupCases = document.getElementById('dedup-cases');
+    const dedupCreditors = document.getElementById('dedup-creditors');
+    const dedupDuplicates = document.getElementById('dedup-duplicates');
+    const dedupClaims = document.getElementById('dedup-claims');
+
+    if (dedupCases) dedupCases.textContent = stats.total_cases_processed.toLocaleString();
+    if (dedupCreditors) dedupCreditors.textContent = stats.total_creditors_added.toLocaleString();
+    if (dedupDuplicates) dedupDuplicates.textContent = stats.total_duplicates_removed.toLocaleString();
+    if (dedupClaims) dedupClaims.textContent = stats.total_claims_updated.toLocaleString();
+
+    // Показуємо статистику якщо є дані або якщо процес запущений
+    const statsContainer = document.getElementById('deduplicationStats');
+    if ((stats.total_cases_processed > 0 || deduplicationRunning) && statsContainer) {
+        statsContainer.style.display = 'grid';
+    }
+
+    console.log('Статистика дедуплікації оновлена:', new Date().toLocaleTimeString());
+}
+
+// Запуск автооновлення кожні 5 секунд
+document.addEventListener("DOMContentLoaded", function() {
+    updateStats(); // Перше оновлення
+
+    // Перевірка чи процеси запущені при завантаженні сторінки
+    fetch("{% url 'bankruptcy:deduplication_stats_api' %}", {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.stats.is_running) {
+            // Процес запущений, показуємо кнопку зупинки
+            deduplicationRunning = true;
+            const startBtn = document.getElementById("startDeduplication");
+            const stopBtn = document.getElementById("stopDeduplication");
+            const status = document.getElementById("deduplicationStatus");
+            const statsContainer = document.getElementById("deduplicationStats");
+
+            startBtn.style.display = "none";
+            stopBtn.style.display = "inline-block";
+            status.style.display = "block";
+            status.innerHTML = "<i class='fas fa-check text-success'></i> Процес дедуплікації активний";
+            statsContainer.style.display = "grid";
+        }
+    })
+    .catch(error => {
+        console.error('Помилка перевірки стану дедуплікації:', error);
+    });
+
+    statsUpdateInterval = setInterval(updateStats, 5000); // Кожні 5 секунд
+});
+</script>
+{% endblock %}
