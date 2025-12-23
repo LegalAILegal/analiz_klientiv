@@ -1,0 +1,166 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: analiz_db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-analiz_klientiv}
+      POSTGRES_USER: ${POSTGRES_USER:-analiz_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-analiz_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"  # Змінено на 5433, щоб уникнути можливих конфліктів
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-analiz_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: analiz_redis
+    ports:
+      - "6380:6379"  # Змінено на 6380, щоб уникнути конфлікту
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: always
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/django/Dockerfile
+    container_name: analiz_web
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./:/app
+      - static_volume:/app/staticfiles
+      - logs_volume:/app/logs
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DEBUG=True
+      - DJANGO_SETTINGS_MODULE=analiz_klientiv.settings
+      - POSTGRES_HOST=db
+      - REDIS_HOST=redis
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  file_monitor:
+    build:
+      context: .
+      dockerfile: docker/django/Dockerfile
+    container_name: analiz_file_monitor
+    command: python manage.py start_file_monitor
+    volumes:
+      - ./data:/app/data
+      - logs_volume:/app/logs
+      - ./:/app
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=analiz_klientiv.settings
+      - POSTGRES_HOST=db
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+
+  stats_monitor:
+    build:
+      context: .
+      dockerfile: docker/django/Dockerfile
+    container_name: analiz_stats_monitor
+    command: python manage.py auto_update_statistics --check-interval=300 --min-changes=100 --verbose
+    volumes:
+      - logs_volume:/app/logs
+      - ./:/app
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=analiz_klientiv.settings
+      - POSTGRES_HOST=db
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+
+  mistral_processor:
+    build:
+      context: .
+      dockerfile: docker/django/Dockerfile
+    container_name: analiz_mistral_processor
+    command: python manage.py analyze_resolutions_mistral --continuous
+    volumes:
+      - logs_volume:/app/logs
+      - /tmp/resolution_temp:/tmp/resolution_temp
+      - ./:/app
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=analiz_klientiv.settings
+      - POSTGRES_HOST=db
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY_PROCESS1}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  dedup_processor:
+    build:
+      context: .
+      dockerfile: docker/django/Dockerfile
+    container_name: analiz_dedup_processor
+    command: python manage.py analyze_resolutions_dedup --continuous
+    volumes:
+      - logs_volume:/app/logs
+      - ./:/app
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=analiz_klientiv.settings
+      - POSTGRES_HOST=db
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY_PROCESS2}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  static_volume:
+    driver: local
+  logs_volume:
+    driver: local
+
+networks:
+  default:
+    name: analiz_network

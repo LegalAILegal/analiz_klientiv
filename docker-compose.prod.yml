@@ -1,0 +1,205 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: analiz_db_prod
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-analiz_klientiv}
+      POSTGRES_USER: ${POSTGRES_USER:-analiz_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-analiz_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    container_name: analiz_redis_prod
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: always
+    networks:
+      - backend
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/django/Dockerfile
+      args:
+        - BUILD_ENV=production
+    container_name: analiz_web_prod
+    command: gunicorn analiz_klientiv.wsgi:application --bind 0.0.0.0:8000 --workers 4 --threads 2 --timeout 120 --max-requests 1000 --max-requests-jitter 50 --access-logfile /app/logs/gunicorn-access.log --error-logfile /app/logs/gunicorn-error.log --log-level info
+    volumes:
+      - static_volume_prod:/app/staticfiles
+      - media_volume_prod:/app/media
+      - logs_volume_prod:/app/logs
+    env_file:
+      - .env.production
+    environment:
+      - DEBUG=False
+      - DJANGO_SETTINGS_MODULE=analiz_klientiv.settings
+      - POSTGRES_HOST=db
+      - REDIS_HOST=redis
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - backend
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: analiz_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - static_volume_prod:/var/www/static:ro
+      - media_volume_prod:/var/www/media:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+      - logs_volume_prod:/var/log/nginx
+    depends_on:
+      - web
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - frontend
+      - backend
+
+  file_monitor:
+    build:
+      context: .
+      dockerfile: docker/django/Dockerfile
+    container_name: analiz_file_monitor_prod
+    command: python manage.py start_file_monitor
+    volumes:
+      - ./data:/app/data:ro
+      - logs_volume_prod:/app/logs
+    env_file:
+      - .env.production
+    environment:
+      - DJANGO_SETTINGS_MODULE=analiz_klientiv.settings
+      - POSTGRES_HOST=db
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+    networks:
+      - backend
+
+  stats_monitor:
+    build:
+      context: .
+      dockerfile: docker/django/Dockerfile
+    container_name: analiz_stats_monitor_prod
+    command: python manage.py auto_update_statistics --check-interval=300 --min-changes=100 --verbose
+    volumes:
+      - logs_volume_prod:/app/logs
+    env_file:
+      - .env.production
+    environment:
+      - DJANGO_SETTINGS_MODULE=analiz_klientiv.settings
+      - POSTGRES_HOST=db
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+    networks:
+      - backend
+
+  mistral_processor:
+    build:
+      context: .
+      dockerfile: docker/django/Dockerfile
+    container_name: analiz_mistral_processor_prod
+    command: python manage.py analyze_resolutions_mistral --continuous
+    volumes:
+      - logs_volume_prod:/app/logs
+      - /tmp/resolution_temp:/tmp/resolution_temp
+    env_file:
+      - .env.production
+    environment:
+      - DJANGO_SETTINGS_MODULE=analiz_klientiv.settings
+      - POSTGRES_HOST=db
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY_PROCESS1}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.5'
+    networks:
+      - backend
+
+  dedup_processor:
+    build:
+      context: .
+      dockerfile: docker/django/Dockerfile
+    container_name: analiz_dedup_processor_prod
+    command: python manage.py analyze_resolutions_dedup --continuous
+    volumes:
+      - logs_volume_prod:/app/logs
+    env_file:
+      - .env.production
+    environment:
+      - DJANGO_SETTINGS_MODULE=analiz_klientiv.settings
+      - POSTGRES_HOST=db
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY_PROCESS2}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.5'
+    networks:
+      - backend
+
+volumes:
+  postgres_data_prod:
+    driver: local
+  redis_data_prod:
+    driver: local
+  static_volume_prod:
+    driver: local
+  media_volume_prod:
+    driver: local
+  logs_volume_prod:
+    driver: local
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge

@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+/staticfiles
+/logs/
+
+# Еталонні проєкти (НЕ копіювати в образ - тільки для читання)
+project_courtagent.pro_production/
+SR_AI/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+.dockerignore
+Dockerfile
+docker-compose*.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Claude
+.claude/
+
+# Temp files
+temp_documents/
+/tmp/
+
+# Backup files
+*.bak
+*.sql
+*.dump
+
+# Documentation
+README.md
+CLAUDE.md
+*.md
+docs/
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node modules (якщо використовуються)
+node_modules/

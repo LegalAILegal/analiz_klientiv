@@ -80,3 +80,9 @@ project_courtagent.pro_production/
 
 # Service files
 *.service
+# Docker
+.env.production
+docker/nginx/ssl/*.pem
+docker/nginx/ssl/*.key
+backup_*.sql
+*.tar.gz

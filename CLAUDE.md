@@ -467,3 +467,462 @@ GET /api/deduplication-stats/  # Статистика дедуплікації
 - Веб-інтерфейс повинен бути адаптивним та доступним
 - Валідація ЄДРПОУ кодів обов'язкова при обробці даних підприємств
 - При розробці інтерфейсу слідуй існуючим патернам стилізації
+## Docker контейнеризація
+
+Проєкт повністю контейнеризований з використанням Docker та Docker Compose для простого розгортання та управління.
+
+### Архітектура контейнерів
+
+**Development середовище (7 контейнерів):**
+1. **db** - PostgreSQL 15 Alpine (база даних)
+2. **redis** - Redis 7 Alpine (кешування та черги)
+3. **web** - Django development server (runserver)
+4. **file_monitor** - Watchdog моніторинг CSV файлів
+5. **stats_monitor** - Автоматичне оновлення статистики
+6. **mistral_processor** - LLM витягування кредиторів (Процес 1)
+7. **dedup_processor** - LLM дедуплікація кредиторів (Процес 2)
+
+**Production середовище (8 контейнерів):**
+- Всі вищезазначені + **nginx** (reverse proxy, статичні файли, SSL/TLS)
+- **web** використовує Gunicorn замість runserver (4 workers, 2 threads)
+
+### Швидкий старт
+
+#### Development (перший запуск):
+```bash
+# 1. Клонувати репозиторій та перейти в директорію
+cd /home/ruslan/PYTHON/analiz_klientiv
+
+# 2. Створити .env файл
+cp .env.example .env
+
+# 3. Швидкий старт (автоматично: збірка + міграції + імпорт довідників)
+make quickstart
+
+# 4. Відкрити браузер
+# http://localhost:8000
+```
+
+#### Development (подальші запуски):
+```bash
+make up          # Запустити всі сервіси
+make down        # Зупинити всі сервіси
+make restart     # Перезапустити сервіси
+```
+
+#### Production:
+```bash
+# 1. Налаштувати production змінні
+cp .env.example .env.production
+nano .env.production  # Змінити SECRET_KEY, POSTGRES_PASSWORD, ALLOWED_HOSTS
+
+# 2. Повне розгортання
+make deploy-prod
+
+# 3. Доступ
+# HTTP: http://your-domain.com
+# HTTPS: https://your-domain.com (після налаштування SSL)
+```
+
+### Основні команди Makefile
+
+**Загальні команди (60+):**
+```bash
+make help           # Список всіх команд з описами
+```
+
+**Development:**
+```bash
+make build          # Збудувати Docker образи
+make up             # Запустити сервіси в фоні
+make up-logs        # Запустити з live логами
+make down           # Зупинити всі сервіси
+make restart        # Перезапустити сервіси
+make status         # Показати статус контейнерів
+make stats          # Статистика CPU/RAM/Network
+```
+
+**Production:**
+```bash
+make build-prod     # Збудувати production образи
+make up-prod        # Запустити production
+make down-prod      # Зупинити production
+make deploy-prod    # Повне розгортання (build + migrate + up)
+make restart-prod   # Перезапустити production
+make status-prod    # Статус production контейнерів
+```
+
+**Логи:**
+```bash
+make logs           # Всі логи (live)
+make logs-web       # Логи Django
+make logs-db        # Логи PostgreSQL
+make logs-monitor   # Логи file_monitor
+make logs-stats     # Логи stats_monitor
+make logs-mistral   # Логи mistral_processor
+make logs-dedup     # Логи dedup_processor
+make logs-nginx     # Логи Nginx (production)
+make watch-logs-web # Live логи Django (100 останніх)
+make watch-logs-all # Live логи всіх (50 останніх)
+```
+
+**Shell доступ:**
+```bash
+make shell          # Django shell
+make bash           # Bash в web контейнері
+make db-shell       # PostgreSQL shell (psql)
+make redis-cli      # Redis CLI
+make enter-web      # Увійти в web контейнер
+make enter-db       # Увійти в db контейнер
+```
+
+**Django команди:**
+```bash
+make migrate        # Виконати міграції
+make makemigrations # Створити міграції
+make collectstatic  # Зібрати статичні файли
+make createsuperuser # Створити суперкористувача
+```
+
+**Імпорт даних:**
+```bash
+make import-bankruptcy  # Імпорт справ банкрутства
+make import-reference   # Імпорт довідників (суди, регіони)
+make import-court-2024  # Імпорт судових рішень 2024
+```
+
+**Backup та відновлення:**
+```bash
+make backup-db          # Backup PostgreSQL (dev)
+make backup-db-prod     # Backup PostgreSQL (production)
+make db-backup-all      # Повний backup (БД + volumes)
+make restore-db BACKUP=file.sql      # Відновлення (dev)
+make restore-db-prod BACKUP=file.sql # Відновлення (production)
+```
+
+**Моніторинг сервісів:**
+```bash
+make monitor-start  # Запустити file_monitor
+make monitor-stop   # Зупинити file_monitor
+make stats-start    # Запустити stats_monitor
+make stats-stop     # Зупинити stats_monitor
+make mistral-start  # Запустити mistral_processor
+make mistral-stop   # Зупинити mistral_processor
+make dedup-start    # Запустити dedup_processor
+make dedup-stop     # Зупинити dedup_processor
+```
+
+**SSL сертифікати:**
+```bash
+make ssl-check              # Перевірити SSL сертифікати
+make ssl-generate-self-signed # Створити self-signed (для тестування)
+```
+
+**Utility команди:**
+```bash
+make health-check   # Перевірка здоров'я всіх сервісів
+make ps-all         # Показати всі Docker контейнери
+make images         # Показати Docker образи
+make volumes        # Показати Docker volumes
+make networks       # Показати Docker мережі
+make disk-usage     # Використання диску Docker
+make update-deps    # Оновити Python залежності
+make freeze-deps    # Заморозити версії залежностей
+```
+
+**Очищення:**
+```bash
+make clean          # Видалити volumes (НЕБЕЗПЕЧНО!)
+make clean-logs     # Очистити логи
+make rebuild        # Повна перебудова (--no-cache)
+make prune-all      # Очистити невикористані ресурси
+make db-reset       # Скинути БД (НЕБЕЗПЕЧНО!)
+```
+
+**Тестування:**
+```bash
+make test           # Запустити тести
+make test-coverage  # Тести з coverage
+```
+
+### Volumes (персистентні дані)
+
+**Development volumes:**
+```yaml
+postgres_data:      # PostgreSQL база даних
+redis_data:         # Redis дані
+static_volume:      # Django staticfiles
+logs_volume:        # Логи всіх сервісів
+```
+
+**Production volumes:**
+```yaml
+postgres_data_prod: # PostgreSQL база (production)
+redis_data_prod:    # Redis дані (production)
+static_volume_prod: # Статичні файли (production)
+media_volume_prod:  # Медіа файли (production)
+logs_volume_prod:   # Логи (production)
+```
+
+**Важливо:**
+- CSV дані (26 GB) копіюються в Docker образ для автономності
+- Volumes зберігаються навіть після `docker-compose down`
+- Для повного видалення використовуйте `make clean` (з підтвердженням)
+
+### Docker мережі
+
+**Development:**
+- `analiz_network` - bridge мережа для всіх сервісів
+
+**Production:**
+- `frontend` - Nginx ↔ Internet
+- `backend` - Django, PostgreSQL, Redis, процесори
+
+### Структура файлів Docker
+
+```
+/home/ruslan/PYTHON/analiz_klientiv/
+├── docker-compose.yml          # Development конфігурація
+├── docker-compose.prod.yml     # Production конфігурація
+├── .env                        # Development змінні
+├── .env.example               # Приклад змінних
+├── .env.production            # Production змінні
+├── Makefile                   # Команди управління (60+)
+├── .dockerignore              # Виключення для образу
+├── docker/
+│   ├── django/
+│   │   ├── Dockerfile         # Multi-stage Django образ
+│   │   ├── entrypoint.sh      # Ініціалізація контейнера
+│   │   └── wait-for-it.sh     # Очікування PostgreSQL
+│   └── nginx/
+│       ├── nginx.conf         # Основна конфігурація Nginx
+│       ├── conf.d/
+│       │   └── analiz.conf    # Конфігурація додатка
+│       └── ssl/
+│           └── README.md      # Інструкції SSL
+└── backups/                   # Директорія backup файлів
+```
+
+### Systemd → Docker mapping
+
+Проєкт використовує Docker замість systemd служб:
+
+| Systemd служба | Docker контейнер | Команда | Статус |
+|---------------|------------------|---------|--------|
+| `bankruptcy-monitor.service` | `file_monitor` | `python manage.py start_file_monitor` | ✅ Активний |
+| `analiz-court-monitor.service` | `stats_monitor` | `python manage.py auto_update_statistics` | ✅ Активний |
+| N/A | `mistral_processor` | `python manage.py analyze_resolutions_mistral --continuous` | ✅ Активний |
+| N/A | `dedup_processor` | `python manage.py analyze_resolutions_dedup --continuous` | ✅ Активний |
+
+**Переваги Docker підходу:**
+- Портативність між системами
+- Ізоляція залежностей
+- Простіше розгортання
+- Автоматичне відновлення при збоях (restart: always)
+- Централізоване управління через Makefile
+
+### Production налаштування
+
+#### 1. Налаштування SSL/TLS (HTTPS)
+
+**Варіант A: Let's Encrypt (рекомендовано):**
+```bash
+# Встановити certbot
+sudo apt-get install certbot
+
+# Отримати сертифікат
+sudo certbot certonly --standalone -d your-domain.com
+
+# Скопіювати в проєкт
+sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem docker/nginx/ssl/
+sudo cp /etc/letsencrypt/live/your-domain.com/privkey.pem docker/nginx/ssl/
+sudo chmod 644 docker/nginx/ssl/*.pem
+
+# Розкоментувати HTTPS секцію
+nano docker/nginx/conf.d/analiz.conf  # Розкоментувати server {...} для 443
+
+# Перезапустити Nginx
+make restart-nginx
+```
+
+**Варіант B: Self-signed (тільки тестування):**
+```bash
+make ssl-generate-self-signed
+# Розкоментувати HTTPS секцію в docker/nginx/conf.d/analiz.conf
+make restart-nginx
+```
+
+#### 2. Налаштування .env.production
+
+**Критичні параметри:**
+```bash
+# Безпека
+SECRET_KEY=ЗМІНИТИ-НА-ВИПАДКОВИЙ-РЯДОК-64-СИМВОЛИ
+POSTGRES_PASSWORD=СИЛЬНИЙ-ПАРОЛЬ-БЕЗ-ПРОБІЛІВ
+
+# Домени
+ALLOWED_HOSTS=your-domain.com,www.your-domain.com
+CSRF_TRUSTED_ORIGINS=https://your-domain.com,https://www.your-domain.com
+
+# SSL
+SECURE_SSL_REDIRECT=True
+SESSION_COOKIE_SECURE=True
+CSRF_COOKIE_SECURE=True
+```
+
+**Згенерувати SECRET_KEY:**
+```bash
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
+
+#### 3. Розгортання на сервері
+
+```bash
+# 1. Налаштувати змінні
+cp .env.example .env.production
+nano .env.production  # Змінити SECRET_KEY, паролі, домени
+
+# 2. Налаштувати SSL
+# Див. розділ SSL/TLS вище
+
+# 3. Повне розгортання
+make deploy-prod
+
+# 4. Створити суперкористувача
+docker-compose -f docker-compose.prod.yml exec web python manage.py createsuperuser
+
+# 5. Перевірка
+make health-check
+```
+
+#### 4. Firewall налаштування
+
+```bash
+# UFW (Ubuntu)
+sudo ufw allow 22/tcp   # SSH
+sudo ufw allow 80/tcp   # HTTP
+sudo ufw allow 443/tcp  # HTTPS
+sudo ufw enable
+```
+
+#### 5. Автоматичні backup
+
+**Додати в crontab:**
+```bash
+crontab -e
+
+# Щоденний backup о 3:00
+0 3 * * * cd /home/ruslan/PYTHON/analiz_klientiv && make backup-db-prod
+
+# Оновлення SSL (Let's Encrypt) щомісяця
+0 0 1 * * certbot renew --quiet && cd /home/ruslan/PYTHON/analiz_klientiv && make restart-nginx
+```
+
+### Troubleshooting
+
+**Проблема: Контейнери не запускаються**
+```bash
+make logs           # Перегляньте логи
+make health-check   # Перевірка сервісів
+docker ps -a        # Статус всіх контейнерів
+```
+
+**Проблема: PostgreSQL не готовий**
+```bash
+make logs-db        # Логи PostgreSQL
+docker-compose exec db pg_isready -U analiz_user
+```
+
+**Проблема: Django не підключається до БД**
+```bash
+# Перевірте .env файл
+cat .env | grep POSTGRES
+
+# Перевірте мережу
+docker network inspect analiz_network
+```
+
+**Проблема: Порти зайняті**
+```bash
+# Перевірити які процеси використовують порти
+sudo lsof -i :8000  # Django
+sudo lsof -i :5432  # PostgreSQL
+sudo lsof -i :6379  # Redis
+
+# Зупинити конфліктуючі сервіси або змінити порти в docker-compose.yml
+```
+
+**Проблема: Недостатньо місця**
+```bash
+make disk-usage     # Використання диску
+make prune-all      # Очистити невикористані ресурси
+docker system df -v # Детальна статистика
+```
+
+**Проблема: Nginx 502 Bad Gateway**
+```bash
+make logs-nginx     # Логи Nginx
+make logs-web       # Логи Django
+docker-compose -f docker-compose.prod.yml restart web nginx
+```
+
+### Оптимізація продуктивності
+
+**Gunicorn workers (production):**
+```bash
+# Формула: (2 × CPU_cores) + 1
+# Змінити в docker-compose.prod.yml:
+# --workers 4 --threads 2
+```
+
+**PostgreSQL connection pool:**
+```bash
+# .env.production
+MAX_TOTAL_DB_CONNECTIONS=100
+DB_CONNECTION_POOL_SIZE=60
+```
+
+**Redis пам'ять:**
+```bash
+# docker-compose.prod.yml (вже налаштовано):
+# --maxmemory 256mb --maxmemory-policy allkeys-lru
+```
+
+**Статичні файли (Nginx caching):**
+- Static: 30 днів (immutable)
+- Media: 7 днів
+- Gzip compression: level 6
+
+### Моніторинг production
+
+```bash
+# Статистика ресурсів
+make stats
+
+# Логи в реальному часі
+make logs-prod
+
+# Статус сервісів
+make status-prod
+
+# Перевірка здоров'я
+make health-check
+
+# Використання диску
+make disk-usage
+```
+
+### Безпека
+
+**Рекомендації:**
+1. ✅ Змінити `SECRET_KEY` в .env.production
+2. ✅ Використовувати сильні паролі для PostgreSQL
+3. ✅ Налаштувати SSL/TLS (HTTPS)
+4. ✅ Обмежити `ALLOWED_HOSTS` та `CSRF_TRUSTED_ORIGINS`
+5. ✅ Увімкнути firewall (ufw)
+6. ✅ Регулярні backup (cron)
+7. ✅ Оновлювати залежності: `make update-deps`
+8. ⚠️ Не комітити .env файли в Git
+9. ⚠️ Обмежити доступ до SSH (ключі, disable root)
+10. ⚠️ Налаштувати fail2ban для захисту від brute-force
+
