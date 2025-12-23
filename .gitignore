@@ -86,3 +86,4 @@ docker/nginx/ssl/*.pem
 docker/nginx/ssl/*.key
 backup_*.sql
 *.tar.gz
+TelegramBotManager*.exe
