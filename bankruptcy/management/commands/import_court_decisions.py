@@ -26,62 +26,73 @@ class Command(BaseCommand):
             help="Перезаписати існуючі записи"
         )
         parser.add_argument(
-            "--batch-size", 
-            type=int, 
-            default=1000,
-            help="Розмір батчу для bulk_create"
+            "--batch-size",
+            type=int,
+            default=10000,
+            help="Розмір батчу для bulk insert"
+        )
+        parser.add_argument(
+            "--fast",
+            action="store_true",
+            help="Ультрашвидкий імпорт через PostgreSQL COPY"
         )
 
     def handle(self, *args, **options):
         year = options["year"]
         force = options["force"]
         batch_size = options["batch_size"]
-        
+        fast = options.get("fast", False)
+
         # Визначаємо шлях до CSV файлу
         if year >= 2000:
             short_year = year - 2000
         else:
             short_year = year - 1900
-        
+
         csv_filename = f"documents_{short_year:02d}.csv"
         csv_path = os.path.join(settings.BASE_DIR, "data", csv_filename)
-        
+
         if not os.path.exists(csv_path):
             self.stdout.write(
                 self.style.ERROR(f"Файл {csv_filename} не знайдено в директорії data/")
             )
             return
-        
+
+        mode_str = "УЛЬТРАШВИДКИЙ (COPY)" if fast else "ШВИДКИЙ (executemany)"
         self.stdout.write(f"Імпорт судових рішень за {year} рік з файлу {csv_filename}")
+        self.stdout.write(f"Режим: {mode_str}")
         self.stdout.write(f"Шлях до файлу: {csv_path}")
-        
+
         # Підрахунок загальної кількості записів
         total_records = self._count_csv_records(csv_path)
         self.stdout.write(f"Всього записів у CSV: {total_records}")
-        
+
         # Створення індексу для швидкого пошуку в базі даних PostgreSQL
         self._create_temp_table_if_needed(year)
-        
+
         # Імпорт даних
-        imported_count = self._import_csv_data(
-            csv_path, year, force, batch_size, total_records
-        )
-        
+        if fast:
+            imported_count = self._fast_import_via_copy(csv_path, year, total_records)
+        else:
+            imported_count = self._import_csv_data(
+                csv_path, year, force, batch_size, total_records
+            )
+
         self.stdout.write(
             self.style.SUCCESS(f"Імпорт завершено. Оброблено {imported_count} записів.")
         )
-        
+
         # Автоматична оптимізація індексів після великого імпорту
         if imported_count > 0:
-            self.stdout.write("🔧 Перевірка необхідності оптимізації індексів...")
+            self.stdout.write("Перевірка необхідності оптимізації індексів...")
             optimization_result = index_optimizer.optimize_after_import(year, imported_count)
-            
+
             if optimization_result:
                 self.stdout.write(
-                    self.style.SUCCESS("✅ Автоматична оптимізація індексів завершена!")
+                    self.style.SUCCESS("Автоматична оптимізація індексів завершена!")
                 )
             else:
-                self.stdout.write("ℹ️ Оптимізація індексів пропущена (недостатньо змін або занадто рано)")  
+                self.stdout.write("Оптимізація індексів пропущена (недостатньо змін або занадто рано)")  
 
     def _count_csv_records(self, csv_path):
         """Підрахунок кількості записів у CSV файлі"""
@@ -249,82 +260,206 @@ class Command(BaseCommand):
         }
 
     def _insert_batch(self, table_name, batch_data, force):
-        """Вставка батчу даних в таблицю"""
+        """Вставка батчу даних в таблицю (оптимізовано через executemany)"""
         from django.db import connection
-        
+
         if not batch_data:
             return 0
+
+        # Підготовляємо SQL запит
+        if force:
+            insert_sql = f"""
+                INSERT INTO {table_name}
+                (doc_id, court_code, judgment_code, justice_kind, category_code,
+                 cause_num, adjudication_date, receipt_date, judge, doc_url,
+                 status, date_publ, court_name, judgment_name, justice_kind_name,
+                 category_name, resolution_text, import_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (doc_id) DO UPDATE SET
+                    court_code = EXCLUDED.court_code,
+                    judgment_code = EXCLUDED.judgment_code,
+                    justice_kind = EXCLUDED.justice_kind,
+                    category_code = EXCLUDED.category_code,
+                    cause_num = EXCLUDED.cause_num,
+                    adjudication_date = EXCLUDED.adjudication_date,
+                    receipt_date = EXCLUDED.receipt_date,
+                    judge = EXCLUDED.judge,
+                    doc_url = EXCLUDED.doc_url,
+                    status = EXCLUDED.status,
+                    date_publ = EXCLUDED.date_publ,
+                    import_date = EXCLUDED.import_date
+            """
+        else:
+            insert_sql = f"""
+                INSERT INTO {table_name}
+                (doc_id, court_code, judgment_code, justice_kind, category_code,
+                 cause_num, adjudication_date, receipt_date, judge, doc_url,
+                 status, date_publ, court_name, judgment_name, justice_kind_name,
+                 category_name, resolution_text, import_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (doc_id) DO NOTHING
+            """
+
+        # Підготовляємо значення для executemany
+        values_list = []
+        for row_data in batch_data:
+            values_list.append([
+                row_data["doc_id"],
+                row_data["court_code"],
+                row_data["judgment_code"],
+                row_data["justice_kind"],
+                row_data["category_code"],
+                row_data["cause_num"],
+                row_data["adjudication_date"],
+                row_data["receipt_date"],
+                row_data["judge"],
+                row_data["doc_url"],
+                row_data["status"],
+                row_data["date_publ"],
+                row_data["court_name"],
+                row_data["judgment_name"],
+                row_data["justice_kind_name"],
+                row_data["category_name"],
+                row_data["resolution_text"],
+                row_data["import_date"]
+            ])
+
+        # Виконуємо batch insert через executemany
+        try:
+            with connection.cursor() as cursor:
+                cursor.executemany(insert_sql, values_list)
+                inserted_count = cursor.rowcount
+                return inserted_count
+        except Exception as e:
+            logger.error(f"Помилка batch вставки: {e}")
+            return 0
+    def _fast_import_via_copy(self, csv_path, year, total_records):
+        """Ультрашвидкий імпорт через PostgreSQL COPY"""
+        from django.db import connection
+        import tempfile
+        import time
+        
+        table_name = f"court_decisions_{year}"
+        start_time = time.time()
+        
+        self.stdout.write("Створення тимчасової таблиці для COPY...")
+        
+        temp_table = f"{table_name}_temp"
+        
+        try:
+            with connection.cursor() as cursor:
+                # 1. Створюємо тимчасову таблицю БЕЗ обмежень та індексів
+                cursor.execute(f"""
+                    CREATE TEMP TABLE {temp_table} (
+                        doc_id VARCHAR(50),
+                        court_code VARCHAR(20),
+                        judgment_code VARCHAR(10),
+                        justice_kind VARCHAR(10),
+                        category_code VARCHAR(20),
+                        cause_num VARCHAR(255),
+                        adjudication_date VARCHAR(50),
+                        receipt_date VARCHAR(50),
+                        judge VARCHAR(500),
+                        doc_url TEXT,
+                        status VARCHAR(10),
+                        date_publ VARCHAR(50)
+                    )
+                """)
+                
+                self.stdout.write(f"Завантаження даних через COPY з {csv_path}...")
+                
+                # 2. COPY безпосередньо з CSV файлу - НАЙШВИДШИЙ МЕТОД!
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    cursor.copy_expert(f"""
+                        COPY {temp_table} (
+                            doc_id, court_code, judgment_code, justice_kind,
+                            category_code, cause_num, adjudication_date, receipt_date,
+                            judge, doc_url, status, date_publ
+                        )
+                        FROM STDIN WITH (
+                            FORMAT CSV,
+                            DELIMITER E'\\t',
+                            HEADER TRUE,
+                            NULL ''
+                        )
+                    """, f)
+                
+                # Перевіряємо скільки завантажилося
+                cursor.execute(f"SELECT COUNT(*) FROM {temp_table}")
+                loaded_count = cursor.fetchone()[0]
+                self.stdout.write(f"Завантажено {loaded_count} записів за {time.time() - start_time:.1f} сек")
+                
+                # 3. Вставляємо з тимчасової таблиці в основну (з обробкою дублікатів)
+                self.stdout.write("Перенесення даних в основну таблицю...")
+                
+                cursor.execute(f"""
+                    INSERT INTO {table_name} (
+                        doc_id, court_code, judgment_code, justice_kind, category_code,
+                        cause_num, adjudication_date, receipt_date, judge, doc_url,
+                        status, date_publ, court_name, judgment_name, justice_kind_name,
+                        category_name, resolution_text, import_date
+                    )
+                    SELECT 
+                        doc_id,
+                        court_code,
+                        judgment_code,
+                        justice_kind,
+                        category_code,
+                        cause_num,
+                        CASE 
+                            WHEN adjudication_date ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}'
+                            THEN adjudication_date::TIMESTAMP
+                            ELSE NULL
+                        END,
+                        CASE 
+                            WHEN receipt_date ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}'
+                            THEN receipt_date::TIMESTAMP
+                            ELSE NULL
+                        END,
+                        judge,
+                        doc_url,
+                        status,
+                        CASE 
+                            WHEN date_publ ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}'
+                            THEN date_publ::TIMESTAMP
+                            ELSE NULL
+                        END,
+                        '',  -- court_name
+                        '',  -- judgment_name
+                        '',  -- justice_kind_name
+                        '',  -- category_name
+                        '',  -- resolution_text
+                        NOW()  -- import_date
+                    FROM {temp_table}
+                    ON CONFLICT (doc_id) DO NOTHING
+                """)
+                
+                inserted_count = cursor.rowcount
+                
+                # 4. Видаляємо тимчасову таблицю
+                cursor.execute(f"DROP TABLE {temp_table}")
+                
+                elapsed = time.time() - start_time
+                rate = loaded_count / elapsed if elapsed > 0 else 0
+                
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"COPY імпорт завершено за {elapsed:.1f} сек "
+                        f"({rate:.0f} записів/сек), вставлено {inserted_count} нових"
+                    )
+                )
+                
+                return inserted_count
+                
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f"Помилка COPY імпорту: {e}"))
+            logger.error(f"Помилка COPY імпорту: {e}", exc_info=True)
             
-        inserted_count = 0
-        
-        with connection.cursor() as cursor:
-            for row_data in batch_data:
-                try:
-                    # Перевіряємо чи запис вже існує
-                    if not force:
-                        cursor.execute(f"SELECT 1 FROM {table_name} WHERE doc_id = %s", [row_data["doc_id"]])
-                        if cursor.fetchone():
-                            continue  # Пропускаємо існуючий запис
-                    
-                    # Вставляємо запис
-                    if force:
-                        insert_sql = f"""
-                            INSERT INTO {table_name} 
-                            (doc_id, court_code, judgment_code, justice_kind, category_code, 
-                             cause_num, adjudication_date, receipt_date, judge, doc_url, 
-                             status, date_publ, court_name, judgment_name, justice_kind_name, 
-                             category_name, resolution_text, import_date)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            ON CONFLICT (doc_id) DO UPDATE SET
-                                court_code = EXCLUDED.court_code,
-                                judgment_code = EXCLUDED.judgment_code,
-                                justice_kind = EXCLUDED.justice_kind,
-                                category_code = EXCLUDED.category_code,
-                                cause_num = EXCLUDED.cause_num,
-                                adjudication_date = EXCLUDED.adjudication_date,
-                                receipt_date = EXCLUDED.receipt_date,
-                                judge = EXCLUDED.judge,
-                                doc_url = EXCLUDED.doc_url,
-                                status = EXCLUDED.status,
-                                date_publ = EXCLUDED.date_publ,
-                                import_date = EXCLUDED.import_date
-                        """
-                    else:
-                        insert_sql = f"""
-                            INSERT INTO {table_name} 
-                            (doc_id, court_code, judgment_code, justice_kind, category_code, 
-                             cause_num, adjudication_date, receipt_date, judge, doc_url, 
-                             status, date_publ, court_name, judgment_name, justice_kind_name, 
-                             category_name, resolution_text, import_date)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            ON CONFLICT (doc_id) DO NOTHING
-                        """
-                    
-                    cursor.execute(insert_sql, [
-                        row_data["doc_id"],
-                        row_data["court_code"],
-                        row_data["judgment_code"],
-                        row_data["justice_kind"],
-                        row_data["category_code"],
-                        row_data["cause_num"],
-                        row_data["adjudication_date"],
-                        row_data["receipt_date"],
-                        row_data["judge"],
-                        row_data["doc_url"],
-                        row_data["status"],
-                        row_data["date_publ"],
-                        row_data["court_name"],
-                        row_data["judgment_name"],
-                        row_data["justice_kind_name"],
-                        row_data["category_name"],
-                        row_data["resolution_text"],
-                        row_data["import_date"]
-                    ])
-                    
-                    inserted_count += 1
-                    
-                except Exception as e:
-                    logger.error(f"Помилка вставки запису {row_data.get("doc_id", "unknown")}: {e}")
-                    continue
-        
-        return inserted_count
+            # Видаляємо тимчасову таблицю при помилці
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(f"DROP TABLE IF EXISTS {temp_table}")
+            except:
+                pass
+            
+            return 0

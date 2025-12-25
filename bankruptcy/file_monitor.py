@@ -137,12 +137,24 @@ class CSVFileHandler(FileSystemEventHandler):
                 short_year = int(year_match.group(1))
                 # Конвертуємо короткий рік у повний (25 -> 2025, 05 -> 2005)
                 year = 2000 + short_year if short_year <= 30 else 1900 + short_year
-                
-                # Викликаємо команду для інкрементального оновлення судових рішень
-                call_command("import_court_decisions", year=year, batch_size=5000)
-                
+
+                # Викликаємо команду для інкрементального оновлення судових рішень з ШВИДКИМ імпортом
+                call_command("import_court_decisions", year=year, batch_size=10000, fast=True)
+
                 logger.info(f"Інкрементальне оновлення судових рішень за {year} рік завершено успішно в {datetime.now()}")
-                
+
+                # Інвалідуємо кеш статистики щоб оновився при наступному запиті
+                try:
+                    from bankruptcy.models import CourtDecisionStatistics
+                    # Інвалідуємо весь ієрархічний кеш
+                    CourtDecisionStatistics.objects.filter(stat_type="hierarchical").update(is_valid=False)
+                    # Інвалідуємо загальну статистику
+                    CourtDecisionStatistics.objects.filter(stat_type="general").update(is_valid=False)
+                    CourtDecisionStatistics.objects.filter(stat_type="yearly").update(is_valid=False)
+                    logger.info(f"Кеш статистики інвалідовано після оновлення {year} року")
+                except Exception as cache_error:
+                    logger.error(f"Помилка при інвалідації кешу: {str(cache_error)}")
+
                 # Автоматично витягуємо резолютивні частини з нових рішень
                 try:
                     from bankruptcy.models import MonitoringStatistics
@@ -430,12 +442,24 @@ class FileMonitorService:
                 short_year = int(year_match.group(1))
                 # Конвертуємо короткий рік у повний (25 -> 2025, 05 -> 2005)
                 year = 2000 + short_year if short_year <= 30 else 1900 + short_year
-                
-                # Викликаємо команду для інкрементального оновлення судових рішень
-                call_command("import_court_decisions", year=year, batch_size=5000)
-                
+
+                # Викликаємо команду для інкрементального оновлення судових рішень з ШВИДКИМ імпортом
+                call_command("import_court_decisions", year=year, batch_size=10000, fast=True)
+
                 logger.info(f"Інкрементальне оновлення судових рішень за {year} рік завершено успішно в {datetime.now()}")
-                
+
+                # Інвалідуємо кеш статистики щоб оновився при наступному запиті
+                try:
+                    from bankruptcy.models import CourtDecisionStatistics
+                    # Інвалідуємо весь ієрархічний кеш
+                    CourtDecisionStatistics.objects.filter(stat_type="hierarchical").update(is_valid=False)
+                    # Інвалідуємо загальну статистику
+                    CourtDecisionStatistics.objects.filter(stat_type="general").update(is_valid=False)
+                    CourtDecisionStatistics.objects.filter(stat_type="yearly").update(is_valid=False)
+                    logger.info(f"Кеш статистики інвалідовано після оновлення {year} року")
+                except Exception as cache_error:
+                    logger.error(f"Помилка при інвалідації кешу: {str(cache_error)}")
+
                 # Автоматично витягуємо резолютивні частини з нових рішень
                 try:
                     from bankruptcy.models import MonitoringStatistics

@@ -3,6 +3,8 @@
 {% block title %}Судові рішення - Аналіз клієнтів{% endblock %}
 
 {% block extra_css %}
+<!-- Chart.js для кругових діаграм -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 /* Стилі для фіксованої висоти сторінки без скролу */
 html, body {
@@ -74,7 +76,7 @@ html, body {
 /* Додаткові статистичні секції */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(5, 1fr);
     gap: 6px;
     margin-bottom: 8px;
     align-items: stretch;
@@ -84,11 +86,11 @@ html, body {
     background: white;
     border: 1px solid #dee2e6;
     border-radius: 6px;
-    padding: 3px 5px;
+    padding: 8px;
     text-align: left;
     display: flex;
     flex-direction: column;
-    min-height: 80px;
+    min-height: 160px;
     max-height: none;
     overflow: visible;
     word-wrap: break-word;
@@ -536,11 +538,31 @@ async function refreshAllStats() {
     hideRefreshIndicator();
 }
 
+// Оновлення URL при навігації
+function updateURL(params = {}) {
+    const url = new URL(window.location);
+    url.search = ''; // Очищаємо параметри
+
+    // Додаємо тільки непорожні параметри
+    Object.keys(params).forEach(key => {
+        if (params[key]) {
+            url.searchParams.set(key, params[key]);
+        }
+    });
+
+    history.pushState(params, '', url);
+}
+
 // Ієрархічна навігація
-async function loadYearlyStats(forceRefresh = false) {
+async function loadYearlyStats(forceRefresh = false, updateHistory = true) {
     currentHierarchyLevel = "years";
     hierarchyData = { year: "", justice_kind: "", instance_code: "", judgment_form: "" };
     updateBreadcrumb();
+
+    // Оновлюємо URL
+    if (updateHistory) {
+        updateURL({});
+    }
 
     const container = document.getElementById("hierarchical-stats");
     container.innerHTML = "<div class='loading'>Завантаження даних за роками...</div>";
@@ -582,50 +604,186 @@ function displayYearlyStats(yearsData) {
     container.innerHTML = "";
     resetContainerStyles();
 
-    yearsData.forEach(yearData => {
+    yearsData.forEach((yearData, index) => {
         const yearCard = document.createElement("div");
         yearCard.className = "stat-card clickable";
         // Використовуємо year_short для URL параметрів
         yearCard.onclick = () => loadJusticeKindsForYear(yearData.year_short || yearData.year);
-        
+
         // Підрахунок загальної кількості по всіх видах судочинства
         const totalCount = yearData.justice_kinds.reduce((sum, jk) => sum + jk.count, 0);
-        
-        var justiceKindsHtml = yearData.justice_kinds.map(function(jk) {
-            return '<div style="margin-bottom: 1px;">' + jk.name + ': ' + formatNumber(jk.count) + '</div>';
-        }).join("");
+
+        const canvasId = 'yearChart' + index;
+        const legendId = 'yearLegend' + index;
+
+        // Генеруємо легенду
+        const legendHtml = yearData.justice_kinds.map((jk, idx) => {
+            const colors = getJusticeKindColors();
+            const color = colors[idx % colors.length];
+            const percentage = ((jk.count / totalCount) * 100).toFixed(1);
+            return `
+                <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 3px; font-size: 0.65em;">
+                    <div style="width: 10px; height: 10px; background: ${color}; border-radius: 2px; flex-shrink: 0;"></div>
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${jk.name}: ${formatNumber(jk.count)} (${percentage}%)</span>
+                </div>
+            `;
+        }).join('');
 
         yearCard.innerHTML =
-            '<h6>' + yearData.year + '</h6>' +
-            '<div class="stat-label"><span class="stat-value">' + formatNumber(totalCount) + '</span> рішень</div>' +
-            '<div style="font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px; overflow: visible;">' +
-                justiceKindsHtml +
+            '<h6 style="text-align: center; margin-bottom: 8px; font-weight: bold; color: #2c3e50;">' + yearData.year + '</h6>' +
+            '<div style="display: flex; gap: 12px;">' +
+                '<div style="flex: 0 0 140px; display: flex; align-items: center; justify-content: center;">' +
+                    '<canvas id="' + canvasId + '" width="140" height="140"></canvas>' +
+                '</div>' +
+                '<div style="flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0;">' +
+                    '<div style="margin-bottom: 8px;">' +
+                        '<div class="stat-label" style="white-space: nowrap;"><span class="stat-value" style="font-size: 1.3rem; color: #2c3e50;">' + formatNumber(totalCount) + '</span> <span style="font-size: 0.8rem;">рішень</span></div>' +
+                    '</div>' +
+                    '<div id="' + legendId + '" style="line-height: 1.3;">' + legendHtml + '</div>' +
+                '</div>' +
             '</div>';
         container.appendChild(yearCard);
+
+        // Створюємо діаграму після додавання card до DOM
+        setTimeout(() => createYearPieChart(canvasId, yearData), 0);
     });
 }
 
-async function loadJusticeKindsForYear(year, forceRefresh = false) {
+// Функція для отримання сучасних кольорів для видів судочинства
+function getJusticeKindColors() {
+    return [
+        '#3b82f6', // Цивільне - сучасний синій
+        '#ef4444', // Кримінальне - сучасний червоний
+        '#10b981', // Господарське - сучасний зелений
+        '#f59e0b', // Адміністративне - сучасний помаранчевий
+        '#8b5cf6', // Адмінправопорушення - фіолетовий
+        '#06b6d4', // Інші - бірюзовий
+    ];
+}
+
+function getInstanceColors() {
+    return [
+        '#6366f1', // Касаційна - індиго
+        '#ec4899', // Апеляційна - рожевий
+        '#14b8a6', // Перша - teal
+        '#f97316', // Господарський суд області - помаранчевий
+        '#8b5cf6', // Місцевий суд - фіолетовий
+        '#06b6d4', // Інша інстанція - бірюзовий
+        '#94a3b8', // Невідома інстанція - сірий
+    ];
+}
+
+function getJudgmentFormColors() {
+    return [
+        '#3b82f6', // Постанова - синій
+        '#ef4444', // Вирок - червоний
+        '#10b981', // Ухвала - зелений
+        '#f59e0b', // Рішення - помаранчевий
+        '#8b5cf6', // Додаткове рішення - фіолетовий
+        '#ec4899', // Окрема ухвала - рожевий
+        '#06b6d4', // Окрема думка - бірюзовий
+        '#14b8a6', // Судовий наказ - teal
+    ];
+}
+
+// Універсальна функція для створення кругової діаграми
+function createDoughnutChart(canvasId, items, colors) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) {
+        console.error('Canvas not found:', canvasId);
+        return;
+    }
+
+    // Підготовка даних
+    const labels = items.map(item => item.name);
+    const data = items.map(item => item.count);
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors.slice(0, data.length),
+                borderWidth: 3,
+                borderColor: '#ffffff',
+                hoverBorderWidth: 4,
+                hoverBorderColor: '#ffffff',
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '55%',
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    enabled: true,
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    titleFont: {
+                        size: 13,
+                        weight: 'bold'
+                    },
+                    bodyFont: {
+                        size: 12
+                    },
+                    cornerRadius: 6,
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = formatNumber(context.parsed);
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                            return label + ': ' + value + ' (' + percentage + '%)';
+                        }
+                    }
+                }
+            },
+            animation: {
+                animateRotate: true,
+                animateScale: true,
+                duration: 800,
+                easing: 'easeInOutQuart'
+            }
+        }
+    });
+}
+
+// Функція для створення кругової діаграми для року
+function createYearPieChart(canvasId, yearData) {
+    createDoughnutChart(canvasId, yearData.justice_kinds, getJusticeKindColors());
+}
+
+async function loadJusticeKindsForYear(year, forceRefresh = false, updateHistory = true) {
     currentHierarchyLevel = "justice_kinds";
     hierarchyData.year = year;
     hierarchyData.justice_kind = "";
     hierarchyData.instance_code = "";
     hierarchyData.judgment_form = "";
     updateBreadcrumb();
-    
+
+    // Оновлюємо URL
+    if (updateHistory) {
+        updateURL({ year: year });
+    }
+
     const container = document.getElementById("hierarchical-stats");
     container.innerHTML = "<div class='loading'>Завантаження видів судочинства...</div>";
-    
+
     try {
         const url = new URL("{% url 'bankruptcy:hierarchical_court_decisions_stats_api' %}", window.location.origin);
         url.searchParams.set("year", year);
         if (forceRefresh) {
             url.searchParams.set("force_refresh", "true");
         }
-        
+
         const response = await fetch(url);
         const data = await response.json();
-        
+
         if (data.data && data.data.length > 0) {
             displayJusticeKinds(data.data);
         } else {
@@ -641,41 +799,82 @@ function displayJusticeKinds(justiceKinds) {
     const container = document.getElementById("hierarchical-stats");
     container.innerHTML = "";
     resetContainerStyles();
-    
-    justiceKinds.forEach(jk => {
+
+    justiceKinds.forEach((jk, index) => {
         const kindCard = document.createElement("div");
         kindCard.className = "stat-card clickable";
         kindCard.onclick = () => loadInstancesForJusticeKind(jk.code, jk.name);
-        
-        kindCard.innerHTML = "<h6>" + jk.name + "</h6>" +
-            "<div class='stat-label'><span class='stat-value'>" + formatNumber(jk.count) + "</span> рішень</div>" +
-            "<div style='font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px; overflow: visible;'>" +
-            (jk.instances && jk.instances.length > 0 ?
-                jk.instances.map(function(inst) {
-                    return "<div style='margin-bottom: 1px;'>" + inst.name + ": " + formatNumber(inst.count) + "</div>";
-                }).join("") :
-                "<div style='margin-bottom: 1px;'>Дані завантажуються...</div>") +
-            "</div>";
-        container.appendChild(kindCard);
+
+        // Якщо є дані про інстанції, створюємо діаграму
+        if (jk.instances && jk.instances.length > 0) {
+            const canvasId = 'justiceKindChart' + index;
+            const legendId = 'justiceKindLegend' + index;
+            const totalCount = jk.instances.reduce((sum, inst) => sum + inst.count, 0);
+
+            // Генеруємо легенду
+            const legendHtml = jk.instances.map((inst, idx) => {
+                const colors = getInstanceColors();
+                const color = colors[idx % colors.length];
+                const percentage = ((inst.count / totalCount) * 100).toFixed(1);
+                return `
+                    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 3px; font-size: 0.65em;">
+                        <div style="width: 10px; height: 10px; background: ${color}; border-radius: 2px; flex-shrink: 0;"></div>
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${inst.name}: ${formatNumber(inst.count)} (${percentage}%)</span>
+                    </div>
+                `;
+            }).join('');
+
+            kindCard.innerHTML =
+                '<h6 style="text-align: center; margin-bottom: 8px; font-weight: bold; color: #2c3e50;">' + jk.name + '</h6>' +
+                '<div style="display: flex; gap: 12px;">' +
+                    '<div style="flex: 0 0 140px; display: flex; align-items: center; justify-content: center;">' +
+                        '<canvas id="' + canvasId + '" width="140" height="140"></canvas>' +
+                    '</div>' +
+                    '<div style="flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0;">' +
+                        '<div style="margin-bottom: 8px;">' +
+                            '<div class="stat-label" style="white-space: nowrap;"><span class="stat-value" style="font-size: 1.3rem; color: #2c3e50;">' + formatNumber(jk.count) + '</span> <span style="font-size: 0.8rem;">рішень</span></div>' +
+                        '</div>' +
+                        '<div id="' + legendId + '" style="line-height: 1.3;">' + legendHtml + '</div>' +
+                    '</div>' +
+                '</div>';
+
+            container.appendChild(kindCard);
+
+            // Створюємо діаграму після додавання card до DOM
+            setTimeout(() => createDoughnutChart(canvasId, jk.instances, getInstanceColors()), 0);
+        } else {
+            // Якщо немає даних про інстанції, показуємо просту карточку
+            kindCard.innerHTML = "<h6>" + jk.name + "</h6>" +
+                "<div class='stat-label'><span class='stat-value'>" + formatNumber(jk.count) + "</span> рішень</div>" +
+                "<div style='font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px; overflow: visible;'>" +
+                "<div style='margin-bottom: 1px;'>Дані завантажуються...</div>" +
+                "</div>";
+            container.appendChild(kindCard);
+        }
     });
 }
 
-async function loadInstancesForJusticeKind(justiceKind, justiceKindName) {
+async function loadInstancesForJusticeKind(justiceKind, justiceKindName, updateHistory = true) {
     currentHierarchyLevel = "instances";
     hierarchyData.justice_kind = justiceKind;
     hierarchyData.justice_kind_name = justiceKindName;
     hierarchyData.instance_code = "";
     hierarchyData.judgment_form = "";
     updateBreadcrumb();
-    
+
+    // Оновлюємо URL
+    if (updateHistory) {
+        updateURL({ year: hierarchyData.year, justice_kind: justiceKind });
+    }
+
     const container = document.getElementById("hierarchical-stats");
     container.innerHTML = "<div class='loading'>Завантаження інстанцій...</div>";
-    
+
     try {
         const url = "{% url 'bankruptcy:hierarchical_court_decisions_stats_api' %}" + "?year=" + hierarchyData.year + "&justice_kind=" + justiceKind;
         const response = await fetch(url);
         const data = await response.json();
-        
+
         if (data.data && data.data.length > 0) {
             displayInstances(data.data);
         } else {
@@ -691,40 +890,85 @@ function displayInstances(instances) {
     const container = document.getElementById("hierarchical-stats");
     container.innerHTML = "";
     resetContainerStyles();
-    
-    instances.forEach(instance => {
+
+    instances.forEach((instance, index) => {
         const instanceCard = document.createElement("div");
         instanceCard.className = "stat-card clickable";
         instanceCard.onclick = () => loadJudgmentFormsForInstance(instance.code, instance.name);
-        
-        instanceCard.innerHTML = "<h6>" + instance.name + "</h6>" +
-            "<div class='stat-label'><span class='stat-value'>" + formatNumber(instance.count) + "</span> рішень</div>" +
-            "<div style='font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px; overflow: visible;'>" +
-            (instance.judgment_forms && instance.judgment_forms.length > 0 ?
-                instance.judgment_forms.map(function(jf) {
-                    return "<div style='margin-bottom: 1px;'>" + jf.name + ": " + formatNumber(jf.count) + "</div>";
-                }).join("") :
-                "<div style='margin-bottom: 1px;'>Дані завантажуються...</div>") +
-            "</div>";
-        container.appendChild(instanceCard);
+
+        // Якщо є дані про форми рішень, створюємо діаграму
+        if (instance.judgment_forms && instance.judgment_forms.length > 0) {
+            const canvasId = 'instanceChart' + index;
+            const legendId = 'instanceLegend' + index;
+            const totalCount = instance.judgment_forms.reduce((sum, jf) => sum + jf.count, 0);
+
+            // Генеруємо легенду
+            const legendHtml = instance.judgment_forms.map((jf, idx) => {
+                const colors = getJudgmentFormColors();
+                const color = colors[idx % colors.length];
+                const percentage = ((jf.count / totalCount) * 100).toFixed(1);
+                return `
+                    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 3px; font-size: 0.65em;">
+                        <div style="width: 10px; height: 10px; background: ${color}; border-radius: 2px; flex-shrink: 0;"></div>
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${jf.name}: ${formatNumber(jf.count)} (${percentage}%)</span>
+                    </div>
+                `;
+            }).join('');
+
+            instanceCard.innerHTML =
+                '<h6 style="text-align: center; margin-bottom: 8px; font-weight: bold; color: #2c3e50;">' + instance.name + '</h6>' +
+                '<div style="display: flex; gap: 12px;">' +
+                    '<div style="flex: 0 0 140px; display: flex; align-items: center; justify-content: center;">' +
+                        '<canvas id="' + canvasId + '" width="140" height="140"></canvas>' +
+                    '</div>' +
+                    '<div style="flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0;">' +
+                        '<div style="margin-bottom: 8px;">' +
+                            '<div class="stat-label" style="white-space: nowrap;"><span class="stat-value" style="font-size: 1.3rem; color: #2c3e50;">' + formatNumber(instance.count) + '</span> <span style="font-size: 0.8rem;">рішень</span></div>' +
+                        '</div>' +
+                        '<div id="' + legendId + '" style="line-height: 1.3;">' + legendHtml + '</div>' +
+                    '</div>' +
+                '</div>';
+
+            container.appendChild(instanceCard);
+
+            // Створюємо діаграму після додавання card до DOM
+            setTimeout(() => createDoughnutChart(canvasId, instance.judgment_forms, getJudgmentFormColors()), 0);
+        } else {
+            // Якщо немає даних про форми рішень, показуємо просту карточку
+            instanceCard.innerHTML = "<h6>" + instance.name + "</h6>" +
+                "<div class='stat-label'><span class='stat-value'>" + formatNumber(instance.count) + "</span> рішень</div>" +
+                "<div style='font-size: 0.6em; text-align: left; line-height: 1.2; margin-top: 2px; overflow: visible;'>" +
+                "<div style='margin-bottom: 1px;'>Дані завантажуються...</div>" +
+                "</div>";
+            container.appendChild(instanceCard);
+        }
     });
 }
 
-async function loadJudgmentFormsForInstance(instanceCode, instanceName) {
+async function loadJudgmentFormsForInstance(instanceCode, instanceName, updateHistory = true) {
     currentHierarchyLevel = "judgment_forms";
     hierarchyData.instance_code = instanceCode;
     hierarchyData.instance_name = instanceName;
     hierarchyData.judgment_form = "";
     updateBreadcrumb();
-    
+
+    // Оновлюємо URL
+    if (updateHistory) {
+        updateURL({
+            year: hierarchyData.year,
+            justice_kind: hierarchyData.justice_kind,
+            instance_code: instanceCode
+        });
+    }
+
     const container = document.getElementById("hierarchical-stats");
     container.innerHTML = "<div class='loading'>Завантаження форм рішень...</div>";
-    
+
     try {
         const url = "{% url 'bankruptcy:hierarchical_court_decisions_stats_api' %}" + "?year=" + hierarchyData.year + "&justice_kind=" + hierarchyData.justice_kind + "&instance_code=" + instanceCode;
         const response = await fetch(url);
         const data = await response.json();
-        
+
         if (data.data && data.data.length > 0) {
             displayJudgmentForms(data.data);
         } else {
@@ -752,11 +996,21 @@ function displayJudgmentForms(judgmentForms) {
     });
 }
 
-async function loadDetailedStats(judgmentForm, judgmentFormName) {
+async function loadDetailedStats(judgmentForm, judgmentFormName, updateHistory = true) {
     currentHierarchyLevel = "decisions";
     hierarchyData.judgment_form = judgmentForm;
     hierarchyData.judgment_form_name = judgmentFormName;
     updateBreadcrumb();
+
+    // Оновлюємо URL
+    if (updateHistory) {
+        updateURL({
+            year: hierarchyData.year,
+            justice_kind: hierarchyData.justice_kind,
+            instance_code: hierarchyData.instance_code,
+            judgment_code: judgmentForm
+        });
+    }
 
     await loadCourtDecisionsList(1); // Завантажуємо першу сторінку
 }
@@ -1328,6 +1582,35 @@ async function loadCourtsForFilters() {
         }
     }
 }
+
+// Обробник для кнопки "Назад" браузера
+window.addEventListener('popstate', function(event) {
+    console.log('Popstate event triggered, state:', event.state);
+    const params = new URLSearchParams(window.location.search);
+
+    // Визначаємо рівень навігації по наявним параметрам
+    if (!params.has('year')) {
+        // Повернулись на рівень років
+        console.log('Loading yearly stats');
+        loadYearlyStats(false, false);
+    } else if (!params.has('justice_kind')) {
+        // Рівень видів судочинства
+        console.log('Loading justice kinds for year:', params.get('year'));
+        loadJusticeKindsForYear(params.get('year'), false, false);
+    } else if (!params.has('instance_code')) {
+        // Рівень інстанцій
+        console.log('Loading instances for justice kind:', params.get('justice_kind'));
+        loadInstancesForJusticeKind(params.get('justice_kind'), '', false);
+    } else if (!params.has('judgment_code')) {
+        // Рівень форм рішень
+        console.log('Loading judgment forms for instance:', params.get('instance_code'));
+        loadJudgmentFormsForInstance(params.get('instance_code'), '', false);
+    } else {
+        // Рівень списку рішень
+        console.log('Loading detailed stats for judgment:', params.get('judgment_code'));
+        loadDetailedStats(params.get('judgment_code'), '', false);
+    }
+});
 
 // Очищення інтервалу при залишенні сторінки
 window.addEventListener("beforeunload", function() {

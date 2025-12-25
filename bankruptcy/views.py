@@ -521,7 +521,7 @@ def get_court_decision_tables():
             AND table_name LIKE 'court_decisions_%'
             ORDER BY table_name DESC
         """)
-        
+
         return [row[0] for row in cursor.fetchall()]
 
 
@@ -1023,6 +1023,8 @@ def hierarchical_court_decisions_stats_api(request):
         # Рівень 1: Статистика за роками
         if not year:
             data = get_yearly_stats_cached(tables)
+            print(f"[DEBUG] get_yearly_stats_cached повернув {len(data['data'])} років")
+            print(f"[DEBUG] Роки: {[item['year'] for item in data['data']]}")
             cache_hours = 12
         # Рівень 2: Статистика за видами судочинства для конкретного року
         elif not justice_kind:
@@ -1063,7 +1065,7 @@ def hierarchical_court_decisions_stats_api(request):
 def get_yearly_stats_cached(tables):
     """Отримання статистики за роками з розбивкою по видах судочинства"""
     yearly_stats = []
-    
+
     with connection.cursor() as cursor:
         for table in tables:
             try:
